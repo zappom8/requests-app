@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { createRequest, createRequestWithTip, retryTipPayment } from "@/actions/requests";
+import { createRequest, createRequestWithTip } from "@/actions/requests";
 import { logSearch } from "@/actions/search-log";
 import type { SongResult } from "@/lib/search";
 import PaymentStep from "./PaymentStep";
@@ -38,7 +38,6 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
   const [error, setError] = useState<string | null>(null);
 
   const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   const tipAmountCents = useMemo(() => {
     if (tipOption === null) return 0;
@@ -141,7 +140,6 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
     setTipOption(null);
     setOtherAmountDollars("");
     setCreatedRequestId(null);
-    setClientSecret(null);
     setError(null);
   }
 
@@ -175,10 +173,10 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
 
       // Already created a request for this song (e.g. came back from the
       // payment step and changed the amount) — reuse the same row rather
-      // than creating a duplicate.
+      // than creating a duplicate. Nothing is pre-created server-side for a
+      // Square payment, so changing the amount just re-enters the payment
+      // step with the new amount — no server round-trip needed.
       if (createdRequestId) {
-        const result = await retryTipPayment(createdRequestId, tipAmountCents);
-        setClientSecret(result.clientSecret);
         setStep("payment");
         return;
       }
@@ -194,7 +192,6 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
         tipAmountCents,
       });
       setCreatedRequestId(result.id);
-      setClientSecret(result.clientSecret);
       setStep("payment");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -231,10 +228,10 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
     );
   }
 
-  if (step === "payment" && clientSecret) {
+  if (step === "payment" && createdRequestId) {
     return (
       <PaymentStep
-        clientSecret={clientSecret}
+        requestId={createdRequestId}
         amountCents={tipAmountCents}
         onSuccess={() => setStep("confirmation")}
         onBack={() => setStep("details")}

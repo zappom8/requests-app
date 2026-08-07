@@ -7,7 +7,7 @@ export type PublicQueueItem = {
 };
 
 // Public payload only — never requesterName, wantsShoutOut, tipAmountCents, or any
-// Stripe/payment field. Sort key: confirmed tips first (highest first), then
+// payment-provider field. Sort key: confirmed tips first (highest first), then
 // untipped requests by request time. See prisma/migrations .../migration.sql
 // for the partial index (`live_queue_idx`) that keeps this fast regardless of
 // how large Request history grows.

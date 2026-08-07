@@ -79,9 +79,14 @@ model Request {
   deletedAt   DateTime?     @db.Timestamptz(3)
 
   tipAmountCents        Int           @default(0)
+  // Legacy Stripe-era payments — historical/audit only, no code path writes
+  // these going forward. Kept alongside the Square fields rather than
+  // renamed/dropped so old records stay queryable.
   stripePaymentIntentId String?       @unique
-  paymentStatus         PaymentStatus @default(NONE)
   stripeFeeCents        Int?
+  squarePaymentId       String?       @unique
+  squareFeeCents        Int?
+  paymentStatus         PaymentStatus @default(NONE)
   refundedAmountCents   Int           @default(0)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)

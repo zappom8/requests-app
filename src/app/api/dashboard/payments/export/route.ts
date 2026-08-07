@@ -10,17 +10,18 @@ export async function GET(request: NextRequest) {
   const { items } = await getPayments({ dateFrom, dateTo });
 
   const csv = Papa.unparse({
-    fields: ["Requester", "Song", "Artist", "Gross", "Fee", "Net", "Refunded", "Status", "Stripe Payment ID", "Date"],
+    fields: ["Requester", "Song", "Artist", "Gross", "Fee", "Net", "Refunded", "Status", "Provider", "Payment ID", "Date"],
     data: items.map((item) => [
       item.requesterName,
       item.songName,
       item.artistName,
       (item.tipAmountCents / 100).toFixed(2),
-      ((item.stripeFeeCents ?? 0) / 100).toFixed(2),
-      ((item.tipAmountCents - (item.stripeFeeCents ?? 0) - item.refundedAmountCents) / 100).toFixed(2),
+      ((item.effectiveFeeCents ?? 0) / 100).toFixed(2),
+      ((item.tipAmountCents - (item.effectiveFeeCents ?? 0) - item.refundedAmountCents) / 100).toFixed(2),
       (item.refundedAmountCents / 100).toFixed(2),
       item.paymentStatus,
-      item.stripePaymentIntentId ?? "",
+      item.provider ?? "",
+      item.effectivePaymentId ?? "",
       item.requestedAt.toISOString(),
     ]),
   });

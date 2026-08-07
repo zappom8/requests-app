@@ -34,7 +34,7 @@ export default async function PaymentsPage({
           <p className="text-lg font-semibold text-tip">{money(totals.grossCents)}</p>
         </div>
         <div className="rounded-lg border border-border bg-surface p-4">
-          <p className="text-xs text-foreground-muted">Stripe fees</p>
+          <p className="text-xs text-foreground-muted">Processing fees</p>
           <p className="text-lg font-semibold">{money(totals.feeCents)}</p>
         </div>
         <div className="rounded-lg border border-border bg-surface p-4">
@@ -90,6 +90,7 @@ export default async function PaymentsPage({
               <th className="px-4 py-2 font-medium">Fee</th>
               <th className="px-4 py-2 font-medium">Net</th>
               <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">Provider</th>
               <th className="px-4 py-2 font-medium">Date</th>
               <th className="px-4 py-2 font-medium"></th>
             </tr>
@@ -103,22 +104,28 @@ export default async function PaymentsPage({
                 </td>
                 <td className="px-4 py-2">{item.requesterName}</td>
                 <td className="px-4 py-2 text-tip">{money(item.tipAmountCents)}</td>
-                <td className="px-4 py-2 text-foreground-muted">{money(item.stripeFeeCents ?? 0)}</td>
+                <td className="px-4 py-2 text-foreground-muted">{money(item.effectiveFeeCents ?? 0)}</td>
                 <td className="px-4 py-2">
-                  {money(item.tipAmountCents - (item.stripeFeeCents ?? 0) - item.refundedAmountCents)}
+                  {money(item.tipAmountCents - (item.effectiveFeeCents ?? 0) - item.refundedAmountCents)}
                 </td>
                 <td className="px-4 py-2 text-foreground-muted">{item.paymentStatus}</td>
+                <td className="px-4 py-2 text-foreground-muted capitalize">{item.provider ?? "—"}</td>
                 <td className="px-4 py-2 text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
                   {item.requestedAt.toLocaleDateString([], { dateStyle: "short" })}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {item.paymentStatus === "SUCCEEDED" && <RefundButton requestId={item.id} />}
+                  {item.paymentStatus === "SUCCEEDED" &&
+                    (item.provider === "square" ? (
+                      <RefundButton requestId={item.id} />
+                    ) : (
+                      <span className="text-xs text-foreground-muted">Refund via Stripe Dashboard</span>
+                    ))}
                 </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-foreground-muted">
+                <td colSpan={9} className="px-4 py-8 text-center text-foreground-muted">
                   No tips yet.
                 </td>
               </tr>

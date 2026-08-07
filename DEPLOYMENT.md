@@ -1,8 +1,8 @@
 # Deployment Checklist
 
-This is a checklist for the actual first deploy — not something to run blindly. Two steps here are genuinely irreversible-ish (switching Stripe to live keys, making the app publicly reachable with real payment processing), so this doc exists to walk through deliberately rather than as a one-command script. Confirm with Lochie before executing the Stripe-live-mode step specifically.
+This started as the checklist for the app's first deploy (steps 1, 2, 4, 6, 7 — already done, the app is live). It now doubles as the reference for the Stripe→Square payment migration, which reuses steps 3, 5, 8, and 9 with Square's env vars/webhook/keys instead of Stripe's. Two things here are genuinely irreversible-ish (switching a payment provider to live/production keys, making the app publicly reachable with real payment processing), so this doc exists to walk through deliberately rather than as a one-command script. Confirm with Lochie before executing the live-payments step specifically.
 
-Deploying also permanently fixes the "localhost isn't reachable from your phone" problem that caused the login-link friction earlier — once there's a real URL, email links work from any device.
+Deploying also permanently fixed the "localhost isn't reachable from your phone" problem that caused the login-link friction earlier — once there's a real URL, email links work from any device.
 
 ## 1. Push the code somewhere Vercel can see it
 
@@ -29,10 +29,15 @@ Copy from `.env` / `.env.supabase`, with two changes:
 | `NEXT_PUBLIC_SUPABASE_URL` | same as local |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | same as local |
 | `SUPABASE_SECRET_KEY` | same as local |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | **test key to start** — switch to live only when ready, see step 6 |
-| `STRIPE_SECRET_KEY` | **test key to start** — same |
-| `STRIPE_WEBHOOK_SECRET` | **new value** — see step 5, this is NOT the same secret used for local Stripe CLI testing |
+| `SQUARE_ACCESS_TOKEN` | **Sandbox token to start** — switch to a production token only when ready, see step 9 |
+| `SQUARE_ENVIRONMENT` | `sandbox` to start — same |
+| `NEXT_PUBLIC_SQUARE_APPLICATION_ID` | Sandbox Application ID to start |
+| `NEXT_PUBLIC_SQUARE_LOCATION_ID` | Sandbox Location ID to start |
+| `NEXT_PUBLIC_SQUARE_ENVIRONMENT` | `sandbox` to start — client needs its own copy to pick the right CDN script |
+| `SQUARE_WEBHOOK_SIGNATURE_KEY` | **new value** — see step 5, this is a Sandbox signing key, separate from production's |
 | `NEXT_PUBLIC_APP_URL` | the real Vercel URL (e.g. `https://your-app.vercel.app`), or custom domain once one exists |
+
+For the Stripe→Square migration specifically: add these on the **Preview** environment scope first (so the migration branch's Vercel Preview deployment can be tested without touching live `main`), then copy them to **Production** scope once merged.
 
 ## 4. Apply the database schema to Supabase
 
@@ -44,14 +49,15 @@ DATABASE_URL="<supabase direct url>" npx prisma migrate deploy
 
 (Uses the direct, non-pooled connection — pooled connections can't run migrations reliably.)
 
-## 5. Set up the real Stripe webhook endpoint
+## 5. Set up the Square webhook subscription
 
-The local dev webhook secret (from `stripe listen`) only works for local testing — production needs its own:
+The core payment flow doesn't need a webhook at all (Square's `CreatePayment` confirms synchronously) — this webhook exists purely for the fee-backfill/refund-reconciliation safety net:
 
-1. Stripe Dashboard → Developers → Webhooks → **Add endpoint**
-2. URL: `https://<your-domain>/api/webhooks/stripe`
-3. Events to send: `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.updated`
-4. Copy the resulting **signing secret** into Vercel's `STRIPE_WEBHOOK_SECRET`
+1. Square Developer Dashboard → your app → **Webhooks** → **Add Subscription**
+2. URL: `https://<your-domain>/api/webhooks/square`
+3. Events to send: `payment.updated`, `refund.updated`
+4. Copy the resulting **Signature Key** into Vercel's `SQUARE_WEBHOOK_SIGNATURE_KEY`
+5. Sandbox and Production are separate subscriptions in Square (same relationship as Stripe test/live) — repeat this for a production subscription in step 9, don't reuse the Sandbox one.
 
 ## 6. Supabase Auth: allow the production URL
 
@@ -64,7 +70,8 @@ Trigger the Vercel deploy (push to `main`, or click Deploy in the dashboard). Ch
 ## 8. Smoke test in production
 
 - [ ] `/request` loads, search works, a no-tip request submits and shows on `/queue`
-- [ ] A tip completes with a real Stripe test card (`4242 4242 4242 4242`) and the webhook fires (check Stripe Dashboard → Webhooks → your endpoint → recent deliveries)
+- [ ] A tip completes with a Square Sandbox test card (`4800 0000 0000 0004`, CVV `111`, any future expiry, any postal code) and the request re-sorts to the front of the queue
+- [ ] Processing fee backfills on the Tips & Payments dashboard within a few seconds (confirms the webhook fired — check Square Developer Dashboard → Webhooks → your subscription → recent deliveries)
 - [ ] Dashboard login works from a phone (the actual point of deploying)
 - [ ] QR code (`/dashboard/qr`) downloads and scans to the correct production URL
 
@@ -72,8 +79,9 @@ Trigger the Vercel deploy (push to `main`, or click Deploy in the dashboard). Ch
 
 Only when Lochie is actually ready to take real tips:
 
-1. Stripe Dashboard → toggle out of Test mode → get live-mode `pk_live_...` / `sk_live_...` keys
-2. Update Vercel env vars `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` and `STRIPE_SECRET_KEY` to the live keys
-3. Repeat step 5 for a **live-mode** webhook endpoint (test and live mode webhooks are separate in Stripe) — update `STRIPE_WEBHOOK_SECRET` again
-4. Redeploy (env var changes need a redeploy to take effect)
-5. Do one real, tiny test tip to confirm money actually moves correctly before telling anyone the QR code is live
+1. Square Developer Dashboard → switch out of Sandbox → get production Access Token / Application ID / Location ID
+2. Update Vercel env vars `SQUARE_ACCESS_TOKEN`, `NEXT_PUBLIC_SQUARE_APPLICATION_ID`, `NEXT_PUBLIC_SQUARE_LOCATION_ID` to the production values, and set `SQUARE_ENVIRONMENT` / `NEXT_PUBLIC_SQUARE_ENVIRONMENT` to `production`
+3. Repeat step 5 for a **production** webhook subscription (Sandbox and production are separate in Square) — update `SQUARE_WEBHOOK_SIGNATURE_KEY` to the production one
+4. If Apple Pay is in scope: verify the domain in Square Dashboard → your app → Apple Pay → Web domains (upload the domain-verification file it provides)
+5. Redeploy (env var changes need a redeploy to take effect)
+6. Do one real, tiny test tip to confirm money actually moves correctly before telling anyone the QR code is live — including confirming the processing fee lands correctly on the Tips & Payments dashboard

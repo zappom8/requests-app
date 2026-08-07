@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { broadcastQueueChanged } from "@/lib/supabase/server";
-import { stripe } from "@/lib/stripe";
+import { squareClient } from "@/lib/square";
 import type { PaymentStatus } from "@/generated/prisma/client";
 
 export type CreateRequestInput = {
@@ -16,7 +16,7 @@ export type CreateRequestInput = {
   wantsShoutOut: boolean;
 };
 
-const MIN_TIP_CENTS = 50; // Stripe's practical minimum charge
+const MIN_TIP_CENTS = 50; // Square's practical minimum charge
 
 async function insertUntippedRequest(input: CreateRequestInput, paymentStatus: PaymentStatus) {
   const requesterName = input.requesterName.trim();
@@ -47,52 +47,83 @@ export async function createRequest(input: CreateRequestInput) {
   return { id: request.id };
 }
 
-// Tip path: the request enters the queue immediately, in untipped position —
-// a PaymentIntent is created and linked, but the tip amount (and the queue
-// re-sort that comes with it) only takes effect once the Stripe webhook
-// confirms payment (src/app/api/webhooks/stripe/route.ts). An abandoned or
-// failed payment never blocks or removes the request.
+// Tip path: the request enters the queue immediately, in untipped position.
+// Nothing is charged yet — the client tokenizes a payment method (card/Apple
+// Pay/Google Pay) via Square's Web Payments SDK, then confirmTipPayment
+// actually charges it. An abandoned or failed payment never blocks or
+// removes the request.
 export async function createRequestWithTip(input: CreateRequestInput & { tipAmountCents: number }) {
   if (!Number.isInteger(input.tipAmountCents) || input.tipAmountCents < MIN_TIP_CENTS) {
     throw new Error("Tip amount must be at least $0.50");
   }
 
   const request = await insertUntippedRequest(input, "PENDING");
-
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: input.tipAmountCents,
-    currency: "aud",
-    automatic_payment_methods: { enabled: true },
-    metadata: { requestId: request.id },
-  });
-
-  await prisma.request.update({
-    where: { id: request.id },
-    data: { stripePaymentIntentId: paymentIntent.id },
-  });
-
-  return { id: request.id, clientSecret: paymentIntent.client_secret };
+  return { id: request.id };
 }
 
-// Retry path: if creating/attaching the initial PaymentIntent failed
-// client-side after the Request row already exists, attach a fresh
-// PaymentIntent to the SAME row rather than creating a duplicate request.
-export async function retryTipPayment(requestId: string, tipAmountCents: number) {
+// Charges the tip via Square's CreatePayment API, which completes
+// synchronously — unlike Stripe's PaymentIntent+webhook-confirms pattern,
+// the DB write happens in the same request/response cycle as the charge
+// itself, so this server action (not a webhook) is the primary source of
+// truth for payment success/failure. A webhook (src/app/api/webhooks/square)
+// still backfills the processing fee, which often isn't available yet on
+// this synchronous response, and acts as a reconciliation safety net.
+// TODO before going live with real money: add Square's verifyBuyer() (SCA/
+// 3-D Secure) step on the client and pass its verificationToken here — some
+// card issuers can decline without it. Skipped for now since it needs buyer
+// billing-contact details we don't currently collect; fine for Sandbox
+// testing, not fine for production.
+export async function confirmTipPayment(requestId: string, sourceId: string, tipAmountCents: number) {
   if (!Number.isInteger(tipAmountCents) || tipAmountCents < MIN_TIP_CENTS) {
     throw new Error("Tip amount must be at least $0.50");
   }
 
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: tipAmountCents,
-    currency: "aud",
-    automatic_payment_methods: { enabled: true },
-    metadata: { requestId },
-  });
+  const request = await prisma.request.findUnique({ where: { id: requestId } });
+  if (!request) throw new Error("Request not found");
+  if (request.paymentStatus === "SUCCEEDED") throw new Error("This request has already been paid");
 
-  await prisma.request.update({
-    where: { id: requestId },
-    data: { stripePaymentIntentId: paymentIntent.id, paymentStatus: "PENDING" },
-  });
+  // First attempt uses the request's own id (stable, matches how
+  // stripePaymentIntentId used to key off the request 1:1). A retry after a
+  // FAILED attempt needs a fresh key, or Square would just replay the
+  // earlier failed response instead of trying the new payment method.
+  const idempotencyKey = request.paymentStatus === "FAILED" ? `${requestId}-retry-${Date.now()}` : requestId;
 
-  return { clientSecret: paymentIntent.client_secret };
+  try {
+    const { payment } = await squareClient.payments.create({
+      sourceId,
+      idempotencyKey,
+      amountMoney: { amount: BigInt(tipAmountCents), currency: "AUD" },
+      locationId: process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID!,
+    });
+
+    if (!payment || (payment.status !== "COMPLETED" && payment.status !== "APPROVED")) {
+      await prisma.request.update({ where: { id: requestId }, data: { paymentStatus: "FAILED" } });
+      throw new Error("Payment was not approved. Please try again.");
+    }
+
+    const squareFeeCents = payment.processingFee?.length
+      ? payment.processingFee.reduce((sum, fee) => sum + Number(fee.amountMoney?.amount ?? 0), 0)
+      : null;
+    const billingName = payment.cardDetails?.card?.cardholderName ?? null;
+
+    await prisma.request.update({
+      where: { id: requestId },
+      data: {
+        tipAmountCents,
+        paymentStatus: "SUCCEEDED",
+        squarePaymentId: payment.id,
+        squareFeeCents,
+        billingName,
+      },
+    });
+
+    revalidatePath("/queue");
+    await broadcastQueueChanged(request.songDatabaseId);
+
+    return { success: true as const };
+  } catch (e) {
+    await prisma.request.update({ where: { id: requestId }, data: { paymentStatus: "FAILED" } });
+    const message = e instanceof Error ? e.message : "Payment failed. Please try again.";
+    throw new Error(message);
+  }
 }
