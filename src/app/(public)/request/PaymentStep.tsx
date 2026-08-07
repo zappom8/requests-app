@@ -35,6 +35,9 @@ function PaymentForm({ amountCents, onSuccess }: { amountCents: number; onSucces
   return (
     <div className="flex flex-col gap-4">
       <PaymentElement
+        options={{
+          defaultValues: { billingDetails: { address: { country: "AU" } } },
+        }}
         onLoadError={(e) => {
           console.error("PaymentElement loadError detail:", JSON.stringify(e));
           setError(e.error.message ?? "Couldn't load payment form.");
@@ -74,7 +77,7 @@ export default function PaymentStep({
       </div>
       <Elements
         stripe={stripePromise}
-        options={{ clientSecret, appearance: { theme: "night" } }}
+        options={{ clientSecret, appearance: { theme: "night" }, locale: "en-AU" }}
       >
         <PaymentForm amountCents={amountCents} onSuccess={onSuccess} />
       </Elements>

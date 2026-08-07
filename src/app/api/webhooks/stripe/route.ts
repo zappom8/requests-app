@@ -43,6 +43,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   if (!request) return; // unrelated PaymentIntent, or already handled — safe to ignore
 
   let stripeFeeCents: number | null = null;
+  let billingName: string | null = null;
   const chargeId =
     typeof paymentIntent.latest_charge === "string" ? paymentIntent.latest_charge : paymentIntent.latest_charge?.id;
   if (chargeId) {
@@ -52,6 +53,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       if (balanceTransaction && typeof balanceTransaction !== "string") {
         stripeFeeCents = balanceTransaction.fee;
       }
+      billingName = charge.billing_details?.name ?? null;
     } catch {
       // Fee not available yet — stripeFeeCents stays null, backfillable later (Phase 6).
     }
@@ -63,6 +65,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       tipAmountCents: paymentIntent.amount_received,
       paymentStatus: "SUCCEEDED",
       stripeFeeCents,
+      billingName,
     },
   });
 

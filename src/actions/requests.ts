@@ -13,7 +13,7 @@ export type CreateRequestInput = {
   artistName: string;
   decade: string | null;
   requesterName: string;
-  shoutOut: string | null;
+  wantsShoutOut: boolean;
 };
 
 const MIN_TIP_CENTS = 50; // Stripe's practical minimum charge
@@ -31,7 +31,7 @@ async function insertUntippedRequest(input: CreateRequestInput, paymentStatus: P
       artistName: input.artistName,
       decade: input.decade,
       requesterName,
-      shoutOut: input.shoutOut?.trim() || null,
+      wantsShoutOut: input.wantsShoutOut,
       paymentStatus,
     },
   });

@@ -67,6 +67,20 @@ export default function LiveQueueList({
     }
   }
 
+  // Laptop workflow: cycling through the live queue at a gig, hands on the
+  // keyboard — Space or Enter marks the top (next-up) request played without
+  // reaching for the mouse.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.code !== "Space" && e.key !== "Enter") return;
+      e.preventDefault();
+      const top = queue[0];
+      if (top && pendingActionId !== top.id) handlePlayed(top.id);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [queue, pendingActionId]);
+
   if (queue.length === 0) {
     return <p className="text-foreground-muted text-center py-12">Queue is empty.</p>;
   }
@@ -74,50 +88,51 @@ export default function LiveQueueList({
   return (
     <ul className="flex flex-col gap-3">
       {queue.map((item) => (
-        <li key={item.id} className="rounded-xl border border-border bg-surface p-4 flex flex-col gap-3">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-lg font-semibold">{item.songName}</p>
-              <p className="text-foreground-muted">{item.artistName}</p>
+        <li key={item.id} className="rounded-xl border border-border bg-surface p-4 flex gap-3">
+          <div className="flex-1 min-w-0 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-lg font-semibold">{item.songName}</p>
+                <p className="text-foreground-muted">{item.artistName}</p>
+              </div>
+              {/* suppressHydrationWarning: locale/timezone-formatted time will
+                  legitimately differ between server render and the browser
+                  (e.g. server in one timezone, phone in another) — expected,
+                  not a bug. */}
+              <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
+                {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+              </p>
             </div>
-            {/* suppressHydrationWarning: locale/timezone-formatted time will
-                legitimately differ between server render and the browser
-                (e.g. server in one timezone, phone in another) — expected,
-                not a bug. */}
-            <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
-              {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-            </p>
-          </div>
 
-          <div className="text-sm">
-            <p>
-              Requested by <span className="font-medium">{item.requesterName}</span>
-            </p>
-            {item.shoutOut && <p className="text-foreground-muted italic">&ldquo;{item.shoutOut}&rdquo;</p>}
-            {item.tipAmountCents > 0 && (
-              <p className="text-tip font-semibold mt-1">Tipped ${(item.tipAmountCents / 100).toFixed(2)}</p>
-            )}
-            {item.paymentStatus === "PENDING" && (
-              <p className="text-xs text-foreground-muted mt-1">Tip payment in progress…</p>
-            )}
-          </div>
+            <div className="text-sm">
+              <p>
+                Requested by <span className="font-medium">{item.requesterName}</span>
+              </p>
+              {item.wantsShoutOut && <p className="text-tip font-medium">⭐ Wants a shout-out</p>}
+              {item.tipAmountCents > 0 && (
+                <p className="text-tip font-semibold mt-1">Tipped ${(item.tipAmountCents / 100).toFixed(2)}</p>
+              )}
+              {item.paymentStatus === "PENDING" && (
+                <p className="text-xs text-foreground-muted mt-1">Tip payment in progress…</p>
+              )}
+            </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => handlePlayed(item.id)}
-              disabled={pendingActionId === item.id}
-              className="flex-1 rounded-lg bg-success px-4 py-3 text-base font-semibold text-background disabled:opacity-50"
-            >
-              PLAYED
-            </button>
             <button
               onClick={() => handleDelete(item.id)}
               disabled={pendingActionId === item.id}
-              className="flex-1 rounded-lg bg-danger px-4 py-3 text-base font-semibold text-background disabled:opacity-50"
+              className="self-start rounded-lg border border-danger/50 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
             >
               DELETE
             </button>
           </div>
+
+          <button
+            onClick={() => handlePlayed(item.id)}
+            disabled={pendingActionId === item.id}
+            className="w-24 shrink-0 rounded-xl bg-success text-background text-lg font-bold disabled:opacity-50 flex items-center justify-center"
+          >
+            PLAYED
+          </button>
         </li>
       ))}
     </ul>

@@ -32,7 +32,6 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
 
   const [requesterName, setRequesterName] = useState("");
   const [giveShoutOut, setGiveShoutOut] = useState(false);
-  const [shoutOut, setShoutOut] = useState("");
   const [tipOption, setTipOption] = useState<TipOption>(null);
   const [otherAmountDollars, setOtherAmountDollars] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -139,7 +138,6 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
     setSelectedSong(null);
     setRequesterName("");
     setGiveShoutOut(false);
-    setShoutOut("");
     setTipOption(null);
     setOtherAmountDollars("");
     setCreatedRequestId(null);
@@ -169,7 +167,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
           artistName: selectedSong.artist,
           decade: selectedSong.decade,
           requesterName,
-          shoutOut: giveShoutOut ? shoutOut : null,
+          wantsShoutOut: giveShoutOut,
         });
         setStep("confirmation");
         return;
@@ -192,7 +190,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
         artistName: selectedSong.artist,
         decade: selectedSong.decade,
         requesterName,
-        shoutOut: giveShoutOut ? shoutOut : null,
+        wantsShoutOut: giveShoutOut,
         tipAmountCents,
       });
       setCreatedRequestId(result.id);
@@ -274,24 +272,8 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
             onChange={(e) => setGiveShoutOut(e.target.checked)}
             className="h-4 w-4 accent-accent"
           />
-          Give someone a shout-out
+          Give someone a shout-out?
         </label>
-
-        {giveShoutOut && (
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium" htmlFor="shoutOut">
-              Shout-out
-            </label>
-            <input
-              id="shoutOut"
-              type="text"
-              value={shoutOut}
-              onChange={(e) => setShoutOut(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-3 py-3 text-base outline-none focus:border-accent"
-              placeholder="e.g. Happy Birthday Sarah!"
-            />
-          </div>
-        )}
 
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
           <div>
@@ -307,7 +289,10 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
               <button
                 key={preset.cents}
                 type="button"
-                onClick={() => setTipOption(tipOption === preset.cents ? null : preset.cents)}
+                onClick={() => {
+                  setTipOption(tipOption === preset.cents ? null : preset.cents);
+                  setOtherAmountDollars("");
+                }}
                 className={`flex-1 min-w-16 rounded-lg px-2 py-3 text-sm font-medium ${
                   tipOption === preset.cents
                     ? "bg-tip text-background"
@@ -317,31 +302,24 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
                 {preset.label}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={() => setTipOption(tipOption === "other" ? null : "other")}
-              className={`flex-1 min-w-16 rounded-lg px-2 py-3 text-xs font-medium ${
-                tipOption === "other"
-                  ? "bg-tip text-background"
-                  : "border border-border text-foreground-muted hover:text-foreground"
-              }`}
-            >
-              Other
-            </button>
           </div>
 
-          {tipOption === "other" && (
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0.5"
-              step="0.5"
-              value={otherAmountDollars}
-              onChange={(e) => setOtherAmountDollars(e.target.value)}
-              placeholder="Custom amount"
-              className="rounded-lg border border-border bg-background px-3 py-2 text-base outline-none focus:border-accent"
-            />
-          )}
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0.5"
+            step="0.5"
+            value={otherAmountDollars}
+            onChange={(e) => {
+              const value = e.target.value;
+              setOtherAmountDollars(value);
+              setTipOption(value.trim() ? "other" : null);
+            }}
+            placeholder="Custom amount"
+            className={`rounded-lg border bg-background px-3 py-2 text-base outline-none focus:border-accent ${
+              tipOption === "other" ? "border-tip" : "border-border"
+            }`}
+          />
         </div>
 
         {error && <p className="text-sm text-danger">{error}</p>}

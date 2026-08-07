@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,13 @@ export default async function ProfilePage() {
       {!settings?.bio && links.length === 0 && !settings?.contactEmail && (
         <p className="text-foreground-muted">Profile coming soon.</p>
       )}
+
+      <Link
+        href="/queue"
+        className="rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+      >
+        View Queue
+      </Link>
     </div>
   );
 }

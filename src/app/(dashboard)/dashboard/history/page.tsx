@@ -172,8 +172,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                   <p className="text-xs text-foreground-muted">{item.artistName}</p>
                 </td>
                 <td className="px-4 py-2">
-                  <p>{item.requesterName}</p>
-                  {item.shoutOut && <p className="text-xs text-foreground-muted italic">&ldquo;{item.shoutOut}&rdquo;</p>}
+                  <p>{item.billingName || item.requesterName}</p>
+                  {item.wantsShoutOut && <p className="text-xs text-tip font-medium">⭐ Wants a shout-out</p>}
                 </td>
                 <td className="px-4 py-2 text-foreground-muted">{item.databaseName}</td>
                 <td className="px-4 py-2">

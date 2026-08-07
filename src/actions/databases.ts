@@ -2,12 +2,26 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { parseSongsCsv } from "@/lib/csv";
 
 export async function createSongDatabase(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Database name is required");
 
-  await prisma.songDatabase.create({ data: { name } });
+  const file = formData.get("file") as File | null;
+  if (file && file.size > 0) {
+    const songs = parseSongsCsv(await file.text());
+    if (songs.length === 0) throw new Error("No valid rows found in that CSV.");
+    await prisma.songDatabase.create({
+      data: {
+        name,
+        songs: { create: songs.map((s) => ({ name: s.name, artist: s.artist, decade: s.decade })) },
+      },
+    });
+  } else {
+    await prisma.songDatabase.create({ data: { name } });
+  }
+
   revalidatePath("/dashboard/databases");
 }
 

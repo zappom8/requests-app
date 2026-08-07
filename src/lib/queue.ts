@@ -6,7 +6,7 @@ export type PublicQueueItem = {
   artistName: string;
 };
 
-// Public payload only — never requesterName, shoutOut, tipAmountCents, or any
+// Public payload only — never requesterName, wantsShoutOut, tipAmountCents, or any
 // Stripe/payment field. Sort key: confirmed tips first (highest first), then
 // untipped requests by request time. See prisma/migrations .../migration.sql
 // for the partial index (`live_queue_idx`) that keeps this fast regardless of
@@ -25,7 +25,7 @@ export type AdminQueueItem = {
   songName: string;
   artistName: string;
   requesterName: string;
-  shoutOut: string | null;
+  wantsShoutOut: boolean;
   tipAmountCents: number;
   paymentStatus: string;
   requestedAt: Date;
@@ -42,7 +42,7 @@ export async function getAdminQueue(songDatabaseId: string): Promise<AdminQueueI
       songName: true,
       artistName: true,
       requesterName: true,
-      shoutOut: true,
+      wantsShoutOut: true,
       tipAmountCents: true,
       paymentStatus: true,
       requestedAt: true,

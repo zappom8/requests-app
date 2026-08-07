@@ -19,7 +19,8 @@ export type HistoryItem = {
   songName: string;
   artistName: string;
   requesterName: string;
-  shoutOut: string | null;
+  billingName: string | null;
+  wantsShoutOut: boolean;
   status: RequestStatus;
   requestedAt: Date;
   tipAmountCents: number;
@@ -67,7 +68,8 @@ export async function getRequestHistory(
       songName: true,
       artistName: true,
       requesterName: true,
-      shoutOut: true,
+      billingName: true,
+      wantsShoutOut: true,
       status: true,
       requestedAt: true,
       tipAmountCents: true,
@@ -85,7 +87,8 @@ export async function getRequestHistory(
       songName: r.songName,
       artistName: r.artistName,
       requesterName: r.requesterName,
-      shoutOut: r.shoutOut,
+      billingName: r.billingName,
+      wantsShoutOut: r.wantsShoutOut,
       status: r.status,
       requestedAt: r.requestedAt,
       tipAmountCents: r.tipAmountCents,

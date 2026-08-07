@@ -70,7 +70,8 @@ model Request {
   decade     String?
 
   requesterName String
-  shoutOut      String?
+  wantsShoutOut Boolean @default(false)
+  billingName   String?
 
   status      RequestStatus @default(QUEUED)
   requestedAt DateTime      @default(now()) @db.Timestamptz(3)
