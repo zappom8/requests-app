@@ -43,7 +43,7 @@ export default async function ProfilePage() {
           {links.map((link) => (
             <a
               key={link.key}
-              href={settings![link.key]!}
+              href={withScheme(settings![link.key]!)}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-full border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent-hover"
