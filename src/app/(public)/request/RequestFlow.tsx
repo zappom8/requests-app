@@ -12,19 +12,15 @@ type Props = {
   initialSongs: SongResult[];
   artists: string[];
   decades: string[];
+  tipPresetsCents: number[];
 };
 
 type Step = "browse" | "details" | "payment" | "confirmation";
 type BrowseMode = "songs" | "artists" | "decades";
-type TipOption = 500 | 1000 | 2000 | "other" | null;
+type TipOption = number | "other" | null;
 
-const TIP_PRESETS: { cents: 500 | 1000 | 2000; label: string }[] = [
-  { cents: 500, label: "$5" },
-  { cents: 1000, label: "$10" },
-  { cents: 2000, label: "$20" },
-];
-
-export default function RequestFlow({ songDatabaseId, initialSongs, artists, decades }: Props) {
+export default function RequestFlow({ songDatabaseId, initialSongs, artists, decades, tipPresetsCents }: Props) {
+  const tipPresets = tipPresetsCents.map((cents) => ({ cents, label: `$${(cents / 100).toFixed(0)}` }));
   const [step, setStep] = useState<Step>("browse");
   const [browseMode, setBrowseMode] = useState<BrowseMode>("songs");
   const [searchQuery, setSearchQuery] = useState("");
@@ -303,13 +299,13 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
             </p>
           </div>
 
-          <div className="grid grid-cols-4 gap-2">
-            {TIP_PRESETS.map((preset) => (
+          <div className="flex flex-wrap gap-2">
+            {tipPresets.map((preset) => (
               <button
                 key={preset.cents}
                 type="button"
                 onClick={() => setTipOption(tipOption === preset.cents ? null : preset.cents)}
-                className={`rounded-lg px-2 py-2 text-sm font-medium ${
+                className={`flex-1 min-w-16 rounded-lg px-2 py-2 text-sm font-medium ${
                   tipOption === preset.cents
                     ? "bg-tip text-background"
                     : "border border-border text-foreground-muted hover:text-foreground"
@@ -321,7 +317,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
             <button
               type="button"
               onClick={() => setTipOption(tipOption === "other" ? null : "other")}
-              className={`rounded-lg px-2 py-2 text-xs font-medium ${
+              className={`flex-1 min-w-16 rounded-lg px-2 py-2 text-xs font-medium ${
                 tipOption === "other"
                   ? "bg-tip text-background"
                   : "border border-border text-foreground-muted hover:text-foreground"

@@ -11,6 +11,8 @@ const NAV_ITEMS = [
   { href: "/dashboard/payments", label: "Tips & Payments" },
   { href: "/dashboard/stats", label: "Statistics" },
   { href: "/dashboard/search-analytics", label: "Search Analytics" },
+  { href: "/dashboard/qr", label: "QR Code" },
+  { href: "/dashboard/settings", label: "Settings" },
 ];
 
 export default function DashboardHeader() {
