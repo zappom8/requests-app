@@ -4,7 +4,7 @@ Lochie's live song request app — replaces Lime DJ. Full spec is in [SPEC.md](.
 
 ## Status
 
-**Phases 1–8 complete** (of 9 phases — see the plan doc for the full list):
+**All 9 phases complete** except the actual deploy, which is a deliberate hold — see "Deploying" below.
 
 - Prisma schema migrated; `pg_trgm` extension, trigram search indexes, and a partial index that keeps the Live Queue fast regardless of history size.
 - Song Databases: create + manually add songs + mark one active.
@@ -21,10 +21,19 @@ Lochie's live song request app — replaces Lime DJ. Full spec is in [SPEC.md](.
 - **Fixed a real, subtle bug found during this verification pass**: all `DateTime` columns were `TIMESTAMP` (no time zone), which combined with a known Prisma 7 + `@prisma/adapter-pg` issue ([prisma/prisma#26786](https://github.com/prisma/prisma/issues/26786) and related) to misread stored times whenever the Postgres session timezone isn't UTC — silently shifting every timestamp by the local UTC offset on read, which broke date-range filtering (Statistics briefly showed 0 requests that definitely existed). Root-caused by comparing raw `pg` driver output against Prisma's, confirmed as a known upstream issue, then fixed at the source: migrated every `DateTime` column to `TIMESTAMPTZ` and set local dev's database timezone to UTC — matching Supabase, which already defaults to UTC (confirmed directly), so production was never actually at risk. Local-dev-only bug, now closed.
 - Profile/Settings (`/dashboard/settings`) and the public Profile (`/profile`): bio, social links, contact email, default tip amounts, brand colours, and photo/logo upload (Supabase Storage, a `branding` bucket created for this — public read, since these images need to show up on public pages without auth). Brand colours actually restyle the live app (override the `--accent`/`--tip` CSS variables from the root layout) — verified visually, not just that the value saves. Default tip amounts on `/request` are now genuinely dynamic from Settings, replacing the old hardcoded $5/$10/$20 — while wiring this up, caught and fixed a real regression in my own code: the fallback used when no Settings row exists still had the old $2 preset baked in, silently reintroducing an option Lochie had explicitly asked removed back in Phase 2. Fixed the fallback and the schema default to match.
 - QR Code (`/dashboard/qr`): permanent QR pointing at `/request` (driven by `NEXT_PUBLIC_APP_URL`, update once on deploy and never again), PNG and SVG download, both verified to actually return valid image files with correct headers.
+- **Phase 9 (hardening), all verified directly:**
+  - Error boundaries (`error.tsx` for both route groups, `global-error.tsx` for the root) — Next 16 renamed the recovery callback prop from `reset` to `retry`, caught before writing broken code. Verified for real: deliberately triggered a thrown Server Action error, confirmed the custom error UI rendered with the actual error message, confirmed "Try again" recovers the page.
+  - **Caught a real mobile layout bug**: the public pages' content divs used `max-w-md mx-auto` inside a flex-column parent without an explicit `w-full` — in that combination, flexbox's default stretch behavior doesn't apply the way block layout would, so content only filled ~79% of the viewport width (297px of 375px) with unexplained side margins. Root-caused via direct DOM measurement (this session's browser tool renders screenshots at different proportions than the real viewport, so trusted `getBoundingClientRect()` over visual inspection), fixed across all 4 affected containers, verified content now correctly fills 375/375px.
+  - **Caught a second real mobile bug** while checking Live Queue: 8 dashboard nav items overflowed a 375px header, which was silently pushing "Log out" partially off-screen. Fixed with a horizontally-scrollable nav (Live Queue needs to stay reachable in one tap since it's what's open mid-gig) plus active-page highlighting.
+  - Touch targets bumped to 44px+ across `/request` (tab buttons, tip buttons, back button) per Apple's HIG minimum — measured directly, not eyeballed.
+  - Live Queue's PLAYED/DELETE buttons checked for contrast: green-on-dark ~8.7:1, red-on-dark ~5.25:1, both clear AA passes.
+  - Webhook idempotency actually tested, not just asserted: resent the same `payment_intent.succeeded` event 4 times via the Stripe CLI, all returned 200, database still showed exactly one correct row afterward — no duplication, no drift.
+  - Search relevance tested across realistic scenarios (short queries, typos, artist search, common words, single characters, nonsense, tied matches) — all behaved sensibly with the existing ILIKE+trigram approach; no threshold changes needed.
+  - [`DEPLOYMENT.md`](./DEPLOYMENT.md) written as a deliberate checklist (env vars, Stripe webhook setup, Supabase Auth URL allow-listing, smoke tests, and a clearly separate step for switching to Stripe live-mode keys) — not executed, since actually deploying and switching to live payments are Lochie's calls to make, not something to do silently.
 
 A Supabase project ("Requests Project") and a Stripe account (test mode) are both connected — credentials in `.env`/`.env.supabase` (gitignored). Local dev's actual song/request data still lives on local Postgres; only the Realtime pub/sub layer (and now Auth) talks to Supabase in dev, so day-to-day testing doesn't touch the real Supabase project's (currently empty) database.
 
-Not yet built: Phase 9 (hardening — mobile/accessibility pass, webhook retry/idempotency testing, search relevance tuning, error boundaries, deployment).
+Everything from the original spec is built. Only the actual deploy remains — see "Deploying" below.
 
 ## Running locally
 
@@ -77,8 +86,8 @@ curl https://api.stripe.com/v1/payment_intents/<pi_...>/confirm \
 - ~~A Supabase account/project~~ — done, connected.
 - ~~Stripe test mode keys~~ — done, connected and verified.
 - ~~Dashboard login~~ — done, Lochie has set his password and logged in.
-- Nothing outstanding right now. Phase 9 (hardening + actual deployment) will need a decision on when to go live and switch Stripe to live-mode keys.
+- **A decision on when to actually deploy**, and separately, when to switch Stripe to live-mode keys (real money) — see [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full checklist. Both are deliberately not done yet.
 
 ## Deploying
 
-Planned: Vercel, connected to the Supabase Postgres above. Not deployed yet — will confirm with Lochie before the first deploy.
+Planned: Vercel, connected to the Supabase Postgres already set up. Full checklist in [`DEPLOYMENT.md`](./DEPLOYMENT.md) — not executed yet, waiting on Lochie's go-ahead since it involves making the app publicly reachable and (eventually) switching to real payment processing.

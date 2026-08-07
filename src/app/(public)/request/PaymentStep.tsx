@@ -64,7 +64,7 @@ export default function PaymentStep({
   onBack: () => void;
 }) {
   return (
-    <div className="min-h-screen px-4 py-6 max-w-md mx-auto flex flex-col gap-6">
+    <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-6">
       <button onClick={onBack} className="text-sm text-foreground-muted text-left hover:text-foreground">
         ← Back
       </button>

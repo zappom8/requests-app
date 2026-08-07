@@ -240,8 +240,11 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
 
   if (step === "details" && selectedSong) {
     return (
-      <div className="min-h-screen px-4 py-6 max-w-md mx-auto flex flex-col gap-6">
-        <button onClick={backToBrowse} className="text-sm text-foreground-muted text-left hover:text-foreground">
+      <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-6">
+        <button
+          onClick={backToBrowse}
+          className="self-start text-sm text-foreground-muted text-left hover:text-foreground py-3 -my-3"
+        >
           ← Back
         </button>
 
@@ -305,7 +308,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
                 key={preset.cents}
                 type="button"
                 onClick={() => setTipOption(tipOption === preset.cents ? null : preset.cents)}
-                className={`flex-1 min-w-16 rounded-lg px-2 py-2 text-sm font-medium ${
+                className={`flex-1 min-w-16 rounded-lg px-2 py-3 text-sm font-medium ${
                   tipOption === preset.cents
                     ? "bg-tip text-background"
                     : "border border-border text-foreground-muted hover:text-foreground"
@@ -317,7 +320,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
             <button
               type="button"
               onClick={() => setTipOption(tipOption === "other" ? null : "other")}
-              className={`flex-1 min-w-16 rounded-lg px-2 py-2 text-xs font-medium ${
+              className={`flex-1 min-w-16 rounded-lg px-2 py-3 text-xs font-medium ${
                 tipOption === "other"
                   ? "bg-tip text-background"
                   : "border border-border text-foreground-muted hover:text-foreground"
@@ -359,7 +362,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
+    <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Request a Song</h1>
 
       <input
@@ -380,7 +383,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
                 setSelectedArtist(null);
                 setSelectedDecade(null);
               }}
-              className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium capitalize ${
+              className={`flex-1 rounded-lg px-3 py-3 text-sm font-medium capitalize ${
                 browseMode === mode
                   ? "bg-accent text-accent-foreground"
                   : "border border-border text-foreground-muted hover:text-foreground"
