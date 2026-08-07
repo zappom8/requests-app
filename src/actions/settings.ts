@@ -93,3 +93,24 @@ export async function uploadBrandingImage(formData: FormData) {
   revalidatePath("/dashboard/settings");
   revalidatePath("/profile");
 }
+
+export async function removeBrandingImage(formData: FormData) {
+  const field = String(formData.get("field") ?? ""); // "photoUrl" | "logoUrl"
+  if (field !== "photoUrl" && field !== "logoUrl") throw new Error("field is required");
+
+  const settings = await prisma.settings.findUnique({ where: { id: SETTINGS_ID } });
+  const currentUrl = settings?.[field];
+
+  if (currentUrl) {
+    const path = currentUrl.split("/branding/")[1];
+    if (path) {
+      const supabase = getSupabaseAdminClient();
+      await supabase.storage.from("branding").remove([path]);
+    }
+  }
+
+  await prisma.settings.update({ where: { id: SETTINGS_ID }, data: { [field]: null } });
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/profile");
+}

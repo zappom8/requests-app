@@ -37,7 +37,7 @@ export default async function SettingsPage() {
 
       <div className="rounded-lg border border-border bg-surface p-4 space-y-4">
         <h2 className="text-sm font-medium">Photo &amp; Logo</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
           <ImageUploadForm field="photoUrl" label="Profile Photo" currentUrl={settings?.photoUrl ?? null} />
           <ImageUploadForm field="logoUrl" label="Logo" currentUrl={settings?.logoUrl ?? null} />
         </div>
