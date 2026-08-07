@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+// Settings just takes whatever text is typed (e.g. "www.instagram.com/x" with
+// no scheme) — without this, that renders as a relative link on our own site.
+function withScheme(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 const SOCIAL_LINKS: { key: "instagramUrl" | "facebookUrl" | "tiktokUrl" | "youtubeUrl" | "spotifyUrl" | "websiteUrl"; label: string }[] = [
   { key: "instagramUrl", label: "Instagram" },
   { key: "facebookUrl", label: "Facebook" },
