@@ -208,9 +208,15 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-6">
         <h1 className="text-2xl font-semibold">Request received!</h1>
         <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button
+            onClick={backToBrowse}
+            className="rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground hover:bg-accent-hover text-center"
+          >
+            Request Another
+          </button>
           <Link
             href="/queue"
-            className="rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground hover:bg-accent-hover text-center"
+            className="rounded-lg border border-border px-4 py-3 text-sm font-medium hover:border-accent text-center"
           >
             View Queue
           </Link>
