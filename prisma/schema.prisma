@@ -28,8 +28,8 @@ model SongDatabase {
   songs      Song[]
   requests   Request[]
   searchLogs SearchLog[]
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
 }
 
 // Trigram GIN indexes on name/artist are added via a hand-written migration
@@ -45,8 +45,8 @@ model Song {
   artist         String
   decade         String?
   requests       Request[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([songDatabaseId])
   @@index([songDatabaseId, artist])
@@ -73,9 +73,9 @@ model Request {
   shoutOut      String?
 
   status      RequestStatus @default(QUEUED)
-  requestedAt DateTime      @default(now())
-  playedAt    DateTime?
-  deletedAt   DateTime?
+  requestedAt DateTime      @default(now()) @db.Timestamptz(3)
+  playedAt    DateTime?     @db.Timestamptz(3)
+  deletedAt   DateTime?     @db.Timestamptz(3)
 
   tipAmountCents        Int           @default(0)
   stripePaymentIntentId String?       @unique
@@ -83,8 +83,8 @@ model Request {
   stripeFeeCents        Int?
   refundedAmountCents   Int           @default(0)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([songDatabaseId, status])
   @@index([status, songDatabaseId, requestedAt])
@@ -97,7 +97,7 @@ model SearchLog {
   searchTerm     String
   resultsFound   Boolean
   eventType      String // 'debounce' | 'submit' | 'select'
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
 
   @@index([createdAt])
   @@index([songDatabaseId, createdAt])
@@ -120,5 +120,5 @@ model Settings {
   defaultTipAmountsCents Int[]    @default([200, 500, 1000, 2000])
   brandPrimaryColor      String?
   brandSecondaryColor    String?
-  updatedAt              DateTime @updatedAt
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
 }

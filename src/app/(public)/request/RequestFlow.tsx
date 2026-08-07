@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createRequest, createRequestWithTip, retryTipPayment } from "@/actions/requests";
+import { logSearch } from "@/actions/search-log";
 import type { SongResult } from "@/lib/search";
 import PaymentStep from "./PaymentStep";
 
@@ -55,8 +56,8 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
   }, [tipOption, otherAmountDollars]);
 
   // Live-typing search debounce — kept short so results feel instant. This is
-  // separate from the ~800-1200ms debounce Phase 7 uses to decide when a
-  // search is "settled" enough to log for Search Analytics (not wired up yet).
+  // separate from the ~1000ms debounce below, which decides when a search is
+  // "settled" enough to log for Search Analytics.
   useEffect(() => {
     const trimmed = searchQuery.trim();
     if (!trimmed) return;
@@ -80,8 +81,37 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
     };
   }, [searchQuery, songDatabaseId]);
 
+  // Search Analytics: log on submit / result-select / debounce-settle — never
+  // per keystroke (locked decision). This UI has no explicit "submit" button
+  // (search is live-as-you-type), so in practice logging happens either here
+  // (query settled ~1s with no further typing) or in selectSong (user picked
+  // a result before this timer fired). searchLoggedRef prevents double-
+  // logging the same search term from both paths.
+  const searchLoggedRef = useRef(false);
+  const searchResultsRef = useRef<SongResult[] | null>(null);
+  useEffect(() => {
+    searchResultsRef.current = searchResults;
+  }, [searchResults]);
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+    const handle = setTimeout(() => {
+      if (searchLoggedRef.current) return;
+      searchLoggedRef.current = true;
+      logSearch({
+        songDatabaseId,
+        searchTerm: trimmed,
+        resultsFound: (searchResultsRef.current ?? []).length > 0,
+        eventType: "debounce",
+      });
+    }, 1000);
+    return () => clearTimeout(handle);
+  }, [searchQuery, songDatabaseId]);
+
   function handleSearchChange(value: string) {
     setSearchQuery(value);
+    searchLoggedRef.current = false;
     if (!value.trim()) setSearchResults(null);
   }
 
@@ -98,6 +128,11 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
   }, [searchQuery, searchResults, browseMode, selectedArtist, selectedDecade, initialSongs]);
 
   function selectSong(song: SongResult) {
+    const trimmed = searchQuery.trim();
+    if (trimmed && !searchLoggedRef.current) {
+      searchLoggedRef.current = true;
+      logSearch({ songDatabaseId, searchTerm: trimmed, resultsFound: true, eventType: "select" });
+    }
     setSelectedSong(song);
     setStep("details");
     setError(null);

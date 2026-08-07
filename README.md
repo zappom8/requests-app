@@ -4,7 +4,7 @@ Lochie's live song request app — replaces Lime DJ. Full spec is in [SPEC.md](.
 
 ## Status
 
-**Phases 1–6 complete** (of 9 phases — see the plan doc for the full list):
+**Phases 1–7 complete** (of 9 phases — see the plan doc for the full list):
 
 - Prisma schema migrated; `pg_trgm` extension, trigram search indexes, and a partial index that keeps the Live Queue fast regardless of history size.
 - Song Databases: create + manually add songs + mark one active.
@@ -17,10 +17,12 @@ Lochie's live song request app — replaces Lime DJ. Full spec is in [SPEC.md](.
 - Song Databases: duplicate / rename / delete (delete is only offered when a database is inactive and has no request history — `Request.songDatabaseId` is a restrict-on-delete FK specifically to protect permanent history). Song Manager: edit songs in place, CSV import (replace semantics — the upload becomes the database's entire song list) and CSV export, both via [papaparse](https://www.papaparse.com/) so quoted fields with commas (e.g. artist `"Earth, Wind & Fire"`) round-trip correctly — verified directly.
 - Request History (`/dashboard/history`): every request ever made, any status, filterable by song/artist/status/database/date range/tip, with cursor-based pagination (not offset — stays fast regardless of table size). Actually load-tested: bulk-generated 50,000 synthetic historical rows via raw SQL, confirmed the Live Queue query stays sub-2ms and History's default sort/filtered search both stay sub-2ms too, then cleaned the synthetic data back out. One honest finding from that test: Postgres's query planner sometimes prefers the existing `songDatabaseId+status` composite index over the dedicated partial `live_queue_idx` for this query shape — both are fast in practice (the partial index's real advantage is staying small/cheap to maintain as PLAYED/DELETED history grows into the hundreds of thousands, not raw query speed at this scale).
 - Tips & Payments (`/dashboard/payments`): gross/fee/refunded/net rollups, per-transaction table, date-range filter, CSV export, and a refund button (two-step confirm). Refunds are financial-only, exactly per the locked design — verified with a real Stripe test refund end-to-end: confirmed a real tip, refunded it via the dashboard, confirmed the refund actually exists on Stripe's side (not just our DB), and confirmed the request's queue `status` and position were completely untouched (net correctly goes negative on a refund, since Stripe doesn't return its processing fee).
+- Search Analytics logging is wired into `/request`'s search box: logged on debounce-settle (~1s of no typing) or on selecting a result before that timer fires — never per keystroke. (Our search is a single unified field with no song/artist distinction, so "most searched songs" and "most searched artists" from the original spec are implemented as one "most searched terms" list — an honest adaptation to how the UI actually works, not a literal match to the spec's wording.) Statistics (`/dashboard/stats`) and Search Analytics (`/dashboard/search-analytics`) dashboards both built with date-range filtering. Verified directly: confirmed exactly one log entry for a 6-keystroke search (not six), confirmed the "select before debounce fires" path logs correctly with no duplicate, confirmed unsuccessful searches are tracked separately.
+- **Fixed a real, subtle bug found during this verification pass**: all `DateTime` columns were `TIMESTAMP` (no time zone), which combined with a known Prisma 7 + `@prisma/adapter-pg` issue ([prisma/prisma#26786](https://github.com/prisma/prisma/issues/26786) and related) to misread stored times whenever the Postgres session timezone isn't UTC — silently shifting every timestamp by the local UTC offset on read, which broke date-range filtering (Statistics briefly showed 0 requests that definitely existed). Root-caused by comparing raw `pg` driver output against Prisma's, confirmed as a known upstream issue, then fixed at the source: migrated every `DateTime` column to `TIMESTAMPTZ` and set local dev's database timezone to UTC — matching Supabase, which already defaults to UTC (confirmed directly), so production was never actually at risk. Local-dev-only bug, now closed.
 
 A Supabase project ("Requests Project") and a Stripe account (test mode) are both connected — credentials in `.env`/`.env.supabase` (gitignored). Local dev's actual song/request data still lives on local Postgres; only the Realtime pub/sub layer (and now Auth) talks to Supabase in dev, so day-to-day testing doesn't touch the real Supabase project's (currently empty) database.
 
-Not yet built: Statistics, Search Analytics, QR code, Profile/Settings.
+Not yet built: QR code, Profile/Settings.
 
 ## Running locally
 
@@ -32,6 +34,8 @@ npm install
 npm run dev
 ```
 
+**On a fresh machine only** (already done here): the local Postgres database must run in UTC, or timestamps will be silently misread — see the "Database" section below.
+
 Then open `http://localhost:3000/request` (public) and `http://localhost:3000/dashboard/queue` (admin — needs the login set up per Lochie's invite email, see Status above).
 
 To seed sample data (a "General Requests" database with 10 songs, set active):
@@ -42,7 +46,7 @@ npx tsx prisma/seed.ts
 
 ## Database
 
-- **Local dev**: plain Postgres, no pooling needed. `.env` points at `postgresql://lochlindormer@localhost:5432/song_request_dev`.
+- **Local dev**: plain Postgres, no pooling needed. `.env` points at `postgresql://lochlindormer@localhost:5432/song_request_dev`. **Must run in UTC** — Homebrew's default Postgres install uses the system's local timezone instead, which (combined with a known Prisma 7 + adapter-pg issue) silently misreads timestamps. Fixed once via `psql song_request_dev -c "ALTER DATABASE song_request_dev SET timezone TO 'UTC';"`, already applied on this machine. A fresh machine needs this run once, then a Postgres restart (`brew services restart postgresql@16`) or fresh connection to take effect. Supabase already defaults to UTC, so this is a local-only step.
 - **Production (planned)**: Supabase Postgres. `DATABASE_URL` = pooled connection (port 6543) for the running app; `DIRECT_URL` = direct connection (port 5432), used only by `prisma.config.ts` for migrations. See `.env.example`.
 - Schema lives in [`prisma/schema.prisma`](./prisma/schema.prisma). This project uses **Prisma 7**, a much newer major version than most existing docs/tutorials assume — notably: driver adapters are mandatory (`@prisma/adapter-pg`, wired in [`src/lib/prisma.ts`](./src/lib/prisma.ts)), the generated client lives in `src/generated/prisma` (gitignored, regenerate with `npx prisma generate`), and Postgres extensions/typed indexes are no longer declarable in `schema.prisma` — they're hand-written directly into the migration SQL instead (see the bottom of [`prisma/migrations/20260807010226_init/migration.sql`](./prisma/migrations/20260807010226_init/migration.sql)). **Because of that last point: always inspect a newly generated migration before applying it** — `prisma migrate dev` doesn't know about those hand-written indexes and could propose dropping them.
 - To change the schema: edit `schema.prisma`, run `npx prisma migrate dev --create-only --name <name>`, review/edit the generated SQL, then `npx prisma migrate dev` to apply.
@@ -70,7 +74,7 @@ curl https://api.stripe.com/v1/payment_intents/<pi_...>/confirm \
 
 - ~~A Supabase account/project~~ — done, connected.
 - ~~Stripe test mode keys~~ — done, connected and verified.
-- **One more password-setup email**, once Supabase's auth email rate limit clears (hit it while testing the fix above — should clear on its own, typically well under an hour). The underlying bug is fixed and verified with a real token; the next email sent will work.
+- ~~Password-setup email~~ — sent (rate limit cleared). Check lochiedormer@hotmail.com (and spam) for a Supabase password-reset email and click through to `/dashboard/set-password` to finish setting up dashboard login.
 
 ## Deploying
 
