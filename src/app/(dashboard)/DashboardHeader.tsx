@@ -7,6 +7,7 @@ import { signOut } from "@/actions/auth";
 const NAV_ITEMS = [
   { href: "/dashboard/queue", label: "Live Queue" },
   { href: "/dashboard/databases", label: "Song Databases" },
+  { href: "/dashboard/history", label: "Request History" },
 ];
 
 export default function DashboardHeader() {
