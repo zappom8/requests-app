@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RequestStatus {
+  QUEUED
+  PLAYED
+  DELETED
+}
+
+enum PaymentStatus {
+  NONE
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model SongDatabase {
+  id         String      @id @default(cuid())
+  name       String
+  songs      Song[]
+  requests   Request[]
+  searchLogs SearchLog[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+// Trigram GIN indexes on name/artist are added via a hand-written migration
+// (prisma/migrations/.../migration.sql) since Prisma 7 no longer supports
+// declaring Postgres extensions or typed index kinds in the schema itself.
+// See README.md "Database notes" for why, and the caution about future
+// `prisma migrate dev` diffs.
+model Song {
+  id             String       @id @default(cuid())
+  songDatabaseId String
+  songDatabase   SongDatabase @relation(fields: [songDatabaseId], references: [id], onDelete: Cascade)
+  name           String
+  artist         String
+  decade         String?
+  requests       Request[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([songDatabaseId])
+  @@index([songDatabaseId, artist])
+  @@index([songDatabaseId, decade])
+}
+
+// The partial index that keeps Live Queue reads fast regardless of history
+// size (`CREATE INDEX ... ON "Request" (...) WHERE status = 'QUEUED'`) is
+// also added via the hand-written migration — Prisma has no `@@index` syntax
+// for a WHERE clause.
+model Request {
+  id             String       @id @default(cuid())
+  songDatabaseId String
+  songDatabase   SongDatabase @relation(fields: [songDatabaseId], references: [id])
+  songId         String?
+  song           Song?        @relation(fields: [songId], references: [id], onDelete: SetNull)
+
+  // Snapshot at request time so history survives later song edits/CSV replace
+  songName   String
+  artistName String
+  decade     String?
+
+  requesterName String
+  shoutOut      String?
+
+  status      RequestStatus @default(QUEUED)
+  requestedAt DateTime      @default(now())
+  playedAt    DateTime?
+  deletedAt   DateTime?
+
+  tipAmountCents        Int           @default(0)
+  stripePaymentIntentId String?       @unique
+  paymentStatus         PaymentStatus @default(NONE)
+  stripeFeeCents        Int?
+  refundedAmountCents   Int           @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([songDatabaseId, status])
+  @@index([status, songDatabaseId, requestedAt])
+}
+
+model SearchLog {
+  id             String       @id @default(cuid())
+  songDatabaseId String
+  songDatabase   SongDatabase @relation(fields: [songDatabaseId], references: [id])
+  searchTerm     String
+  resultsFound   Boolean
+  eventType      String // 'debounce' | 'submit' | 'select'
+  createdAt      DateTime     @default(now())
+
+  @@index([createdAt])
+  @@index([songDatabaseId, createdAt])
+  @@index([searchTerm])
+}
+
+model Settings {
+  id                     Int      @id @default(1) // singleton row, app enforces id=1
+  activeSongDatabaseId   String?
+  bio                    String?
+  photoUrl               String?
+  logoUrl                String?
+  instagramUrl           String?
+  facebookUrl            String?
+  tiktokUrl              String?
+  youtubeUrl             String?
+  spotifyUrl             String?
+  websiteUrl             String?
+  contactEmail           String?
+  defaultTipAmountsCents Int[]    @default([200, 500, 1000, 2000])
+  brandPrimaryColor      String?
+  brandSecondaryColor    String?
+  updatedAt              DateTime @updatedAt
+}
