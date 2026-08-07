@@ -4,7 +4,7 @@ Lochie's live song request app — replaces Lime DJ. Full spec is in [SPEC.md](.
 
 ## Status
 
-**Phases 1–5 complete** (of 9 phases — see the plan doc for the full list):
+**Phases 1–6 complete** (of 9 phases — see the plan doc for the full list):
 
 - Prisma schema migrated; `pg_trgm` extension, trigram search indexes, and a partial index that keeps the Live Queue fast regardless of history size.
 - Song Databases: create + manually add songs + mark one active.
@@ -16,10 +16,11 @@ Lochie's live song request app — replaces Lime DJ. Full spec is in [SPEC.md](.
 - Live Queue (`/dashboard/queue`) shows full data per request — song, artist, requester, shout-out, tip, time — with large PLAYED/DELETE buttons. Both are soft actions (status change + timestamp, row never deleted) and both broadcast the same Realtime "queue changed" ping used elsewhere, so the public `/queue` and the dashboard stay in sync instantly. Verified end-to-end including a real hydration bug catch (locale/timezone-dependent time formatting rendering differently between server and browser — fixed with `suppressHydrationWarning` on just that element, the standard fix for this exact class of mismatch).
 - Song Databases: duplicate / rename / delete (delete is only offered when a database is inactive and has no request history — `Request.songDatabaseId` is a restrict-on-delete FK specifically to protect permanent history). Song Manager: edit songs in place, CSV import (replace semantics — the upload becomes the database's entire song list) and CSV export, both via [papaparse](https://www.papaparse.com/) so quoted fields with commas (e.g. artist `"Earth, Wind & Fire"`) round-trip correctly — verified directly.
 - Request History (`/dashboard/history`): every request ever made, any status, filterable by song/artist/status/database/date range/tip, with cursor-based pagination (not offset — stays fast regardless of table size). Actually load-tested: bulk-generated 50,000 synthetic historical rows via raw SQL, confirmed the Live Queue query stays sub-2ms and History's default sort/filtered search both stay sub-2ms too, then cleaned the synthetic data back out. One honest finding from that test: Postgres's query planner sometimes prefers the existing `songDatabaseId+status` composite index over the dedicated partial `live_queue_idx` for this query shape — both are fast in practice (the partial index's real advantage is staying small/cheap to maintain as PLAYED/DELETED history grows into the hundreds of thousands, not raw query speed at this scale).
+- Tips & Payments (`/dashboard/payments`): gross/fee/refunded/net rollups, per-transaction table, date-range filter, CSV export, and a refund button (two-step confirm). Refunds are financial-only, exactly per the locked design — verified with a real Stripe test refund end-to-end: confirmed a real tip, refunded it via the dashboard, confirmed the refund actually exists on Stripe's side (not just our DB), and confirmed the request's queue `status` and position were completely untouched (net correctly goes negative on a refund, since Stripe doesn't return its processing fee).
 
 A Supabase project ("Requests Project") and a Stripe account (test mode) are both connected — credentials in `.env`/`.env.supabase` (gitignored). Local dev's actual song/request data still lives on local Postgres; only the Realtime pub/sub layer (and now Auth) talks to Supabase in dev, so day-to-day testing doesn't touch the real Supabase project's (currently empty) database.
 
-Not yet built: Tips & Payments (refunds/reporting), Statistics, Search Analytics, QR code, Profile/Settings.
+Not yet built: Statistics, Search Analytics, QR code, Profile/Settings.
 
 ## Running locally
 
