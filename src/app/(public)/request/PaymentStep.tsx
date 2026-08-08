@@ -2,15 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { confirmTipPayment } from "@/actions/requests";
-import { loadSquareSdk, type SquarePaymentMethod } from "@/lib/square-web-sdk";
+import { loadSquareSdk, type SquarePaymentMethod, type SquareVerificationDetails } from "@/lib/square-web-sdk";
 
 export default function PaymentStep({
   requestId,
+  requesterName,
   amountCents,
   onSuccess,
   onBack,
 }: {
   requestId: string;
+  requesterName: string;
   amountCents: number;
   onSuccess: () => void;
   onBack: () => void;
@@ -26,7 +28,17 @@ export default function PaymentStep({
   const googlePayRef = useRef<SquarePaymentMethod | null>(null);
 
   useEffect(() => {
+    // Dev-mode React Strict Mode double-invokes this effect (mount, cleanup,
+    // mount again) to catch missing-cleanup bugs. Track instances THIS
+    // invocation created in local closure variables (not the shared refs,
+    // which the second invocation would overwrite) so each invocation's
+    // cleanup destroys exactly what it made — otherwise the two invocations
+    // race to attach() the same DOM container and the card field never
+    // reliably renders.
     let cancelled = false;
+    let localCard: SquarePaymentMethod | null = null;
+    let localApplePay: SquarePaymentMethod | null = null;
+    let localGooglePay: SquarePaymentMethod | null = null;
 
     async function setup() {
       try {
@@ -39,11 +51,13 @@ export default function PaymentStep({
         );
 
         const card = await payments.card();
-        await card.attach("#square-card-container");
         if (cancelled) {
           await card.destroy();
           return;
         }
+        localCard = card;
+        await card.attach("#square-card-container");
+        if (cancelled) return;
         cardRef.current = card;
         setCardReady(true);
 
@@ -55,10 +69,15 @@ export default function PaymentStep({
 
         try {
           const applePay = await payments.applePay(paymentRequest);
-          if (!cancelled) {
+          if (cancelled) {
+            await applePay.destroy();
+          } else {
+            localApplePay = applePay;
             await applePay.attach("#apple-pay-button");
-            applePayRef.current = applePay;
-            setApplePayAvailable(true);
+            if (!cancelled) {
+              applePayRef.current = applePay;
+              setApplePayAvailable(true);
+            }
           }
         } catch {
           // Apple Pay unavailable (non-Safari, no card in Wallet, etc.) — hide it, card still works.
@@ -66,10 +85,15 @@ export default function PaymentStep({
 
         try {
           const googlePay = await payments.googlePay(paymentRequest);
-          if (!cancelled) {
+          if (cancelled) {
+            await googlePay.destroy();
+          } else {
+            localGooglePay = googlePay;
             await googlePay.attach("#google-pay-button");
-            googlePayRef.current = googlePay;
-            setGooglePayAvailable(true);
+            if (!cancelled) {
+              googlePayRef.current = googlePay;
+              setGooglePayAvailable(true);
+            }
           }
         } catch {
           // Google Pay unavailable — hide it, card still works.
@@ -83,9 +107,9 @@ export default function PaymentStep({
 
     return () => {
       cancelled = true;
-      cardRef.current?.destroy();
-      googlePayRef.current?.destroy();
-      applePayRef.current?.destroy();
+      localCard?.destroy();
+      localApplePay?.destroy();
+      localGooglePay?.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -95,8 +119,20 @@ export default function PaymentStep({
     setSubmitting(true);
     setError(null);
 
+    // Square requires buyer-verification details (SCA) directly in tokenize()
+    // now — verifyBuyer() as a separate call is deprecated. AU-only business,
+    // so countryCode is hardcoded; name is all we collect on this form.
+    const verificationDetails: SquareVerificationDetails = {
+      amount: (amountCents / 100).toFixed(2),
+      currencyCode: "AUD",
+      intent: "CHARGE",
+      customerInitiated: true,
+      sellerKeyedIn: false,
+      billingContact: { givenName: requesterName, countryCode: "AU" },
+    };
+
     try {
-      const result = await method.tokenize();
+      const result = await method.tokenize(verificationDetails);
       if (result.status !== "OK" || !result.token) {
         throw new Error(result.errors?.[0]?.message ?? "Payment method wasn't accepted. Please try again.");
       }

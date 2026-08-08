@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { broadcastQueueChanged } from "@/lib/supabase/server";
 import { squareClient } from "@/lib/square";
+import { SquareError } from "square";
 import type { PaymentStatus } from "@/generated/prisma/client";
 
 export type CreateRequestInput = {
@@ -123,7 +124,15 @@ export async function confirmTipPayment(requestId: string, sourceId: string, tip
     return { success: true as const };
   } catch (e) {
     await prisma.request.update({ where: { id: requestId }, data: { paymentStatus: "FAILED" } });
-    const message = e instanceof Error ? e.message : "Payment failed. Please try again.";
+    // SquareError's own .message is the raw "Status code: 400 Body: {...}"
+    // string — not something to show a payer. Its structured .errors array
+    // has the actual human-readable detail (e.g. "Authorization error: ...").
+    const message =
+      e instanceof SquareError && e.errors[0]?.detail
+        ? e.errors[0].detail
+        : e instanceof Error
+          ? e.message
+          : "Payment failed. Please try again.";
     throw new Error(message);
   }
 }

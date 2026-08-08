@@ -7,7 +7,7 @@ declare global {
         applicationId: string,
         locationId: string
       ) => {
-        card: () => Promise<SquarePaymentMethod>;
+        card: (options?: unknown) => Promise<SquarePaymentMethod>;
         applePay: (paymentRequest: unknown) => Promise<SquarePaymentMethod>;
         googlePay: (paymentRequest: unknown) => Promise<SquarePaymentMethod>;
         paymentRequest: (options: {
@@ -26,10 +26,22 @@ export type SquareTokenizeResult = {
   errors?: { message: string }[];
 };
 
+export type SquareVerificationDetails = {
+  amount: string;
+  currencyCode: string;
+  intent: "CHARGE";
+  customerInitiated: boolean;
+  sellerKeyedIn: boolean;
+  billingContact?: {
+    givenName?: string;
+    countryCode?: string;
+  };
+};
+
 export type SquarePaymentMethod = {
   attach: (selector: string) => Promise<void>;
   destroy: () => Promise<void>;
-  tokenize: () => Promise<SquareTokenizeResult>;
+  tokenize: (verificationDetails?: SquareVerificationDetails) => Promise<SquareTokenizeResult>;
 };
 
 let sdkPromise: Promise<NonNullable<Window["Square"]>> | null = null;

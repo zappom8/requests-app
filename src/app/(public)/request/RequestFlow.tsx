@@ -232,6 +232,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
     return (
       <PaymentStep
         requestId={createdRequestId}
+        requesterName={requesterName}
         amountCents={tipAmountCents}
         onSuccess={() => setStep("confirmation")}
         onBack={() => setStep("details")}
