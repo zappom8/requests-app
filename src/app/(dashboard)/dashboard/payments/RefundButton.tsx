@@ -17,10 +17,9 @@ export default function RefundButton({ requestId }: { requestId: string }) {
     setError(null);
     const formData = new FormData();
     formData.set("requestId", requestId);
-    try {
-      await refundTip(formData);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Refund failed.");
+    const result = await refundTip(formData);
+    if (!result.success) {
+      setError(result.error);
       setSubmitting(false);
       setConfirming(false);
     }

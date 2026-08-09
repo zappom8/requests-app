@@ -158,7 +158,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
     setError(null);
     try {
       if (tipAmountCents === 0) {
-        await createRequest({
+        const result = await createRequest({
           songDatabaseId,
           songId: selectedSong.id,
           songName: selectedSong.name,
@@ -167,6 +167,10 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
           requesterName,
           wantsShoutOut: giveShoutOut,
         });
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
         setStep("confirmation");
         return;
       }
@@ -191,6 +195,10 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
         wantsShoutOut: giveShoutOut,
         tipAmountCents,
       });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setCreatedRequestId(result.id);
       setStep("payment");
     } catch (e) {

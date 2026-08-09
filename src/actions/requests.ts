@@ -42,10 +42,21 @@ async function insertUntippedRequest(input: CreateRequestInput, paymentStatus: P
   return request;
 }
 
+// Next.js redacts thrown Server Action errors to a generic digest in
+// production builds (dev shows the real message, masking this until it hit
+// Preview) — expected failures (validation, declines) must be returned, not
+// thrown, or the client only ever sees "An error occurred in the Server
+// Components render."
+type ActionResult<T = object> = (T & { success: true }) | { success: false; error: string };
+
 // No-tip path.
-export async function createRequest(input: CreateRequestInput) {
-  const request = await insertUntippedRequest(input, "NONE");
-  return { id: request.id };
+export async function createRequest(input: CreateRequestInput): Promise<ActionResult<{ id: string }>> {
+  try {
+    const request = await insertUntippedRequest(input, "NONE");
+    return { success: true, id: request.id };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Something went wrong. Please try again." };
+  }
 }
 
 // Tip path: the request enters the queue immediately, in untipped position.
@@ -53,13 +64,18 @@ export async function createRequest(input: CreateRequestInput) {
 // Pay/Google Pay) via Square's Web Payments SDK, then confirmTipPayment
 // actually charges it. An abandoned or failed payment never blocks or
 // removes the request.
-export async function createRequestWithTip(input: CreateRequestInput & { tipAmountCents: number }) {
-  if (!Number.isInteger(input.tipAmountCents) || input.tipAmountCents < MIN_TIP_CENTS) {
-    throw new Error("Tip amount must be at least $0.50");
+export async function createRequestWithTip(
+  input: CreateRequestInput & { tipAmountCents: number }
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    if (!Number.isInteger(input.tipAmountCents) || input.tipAmountCents < MIN_TIP_CENTS) {
+      throw new Error("Tip amount must be at least $0.50");
+    }
+    const request = await insertUntippedRequest(input, "PENDING");
+    return { success: true, id: request.id };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Something went wrong. Please try again." };
   }
-
-  const request = await insertUntippedRequest(input, "PENDING");
-  return { id: request.id };
 }
 
 // Charges the tip via Square's CreatePayment API, which completes
@@ -74,14 +90,18 @@ export async function createRequestWithTip(input: CreateRequestInput & { tipAmou
 // card issuers can decline without it. Skipped for now since it needs buyer
 // billing-contact details we don't currently collect; fine for Sandbox
 // testing, not fine for production.
-export async function confirmTipPayment(requestId: string, sourceId: string, tipAmountCents: number) {
+export async function confirmTipPayment(
+  requestId: string,
+  sourceId: string,
+  tipAmountCents: number
+): Promise<ActionResult> {
   if (!Number.isInteger(tipAmountCents) || tipAmountCents < MIN_TIP_CENTS) {
-    throw new Error("Tip amount must be at least $0.50");
+    return { success: false, error: "Tip amount must be at least $0.50" };
   }
 
   const request = await prisma.request.findUnique({ where: { id: requestId } });
-  if (!request) throw new Error("Request not found");
-  if (request.paymentStatus === "SUCCEEDED") throw new Error("This request has already been paid");
+  if (!request) return { success: false, error: "Request not found" };
+  if (request.paymentStatus === "SUCCEEDED") return { success: false, error: "This request has already been paid" };
 
   // First attempt uses the request's own id (stable, matches how
   // stripePaymentIntentId used to key off the request 1:1). A retry after a
@@ -99,7 +119,7 @@ export async function confirmTipPayment(requestId: string, sourceId: string, tip
 
     if (!payment || (payment.status !== "COMPLETED" && payment.status !== "APPROVED")) {
       await prisma.request.update({ where: { id: requestId }, data: { paymentStatus: "FAILED" } });
-      throw new Error("Payment was not approved. Please try again.");
+      return { success: false, error: "Payment was not approved. Please try again." };
     }
 
     const squareFeeCents = payment.processingFee?.length
@@ -121,7 +141,7 @@ export async function confirmTipPayment(requestId: string, sourceId: string, tip
     revalidatePath("/queue");
     await broadcastQueueChanged(request.songDatabaseId);
 
-    return { success: true as const };
+    return { success: true };
   } catch (e) {
     await prisma.request.update({ where: { id: requestId }, data: { paymentStatus: "FAILED" } });
     // SquareError's own .message is the raw "Status code: 400 Body: {...}"
@@ -133,6 +153,6 @@ export async function confirmTipPayment(requestId: string, sourceId: string, tip
         : e instanceof Error
           ? e.message
           : "Payment failed. Please try again.";
-    throw new Error(message);
+    return { success: false, error: message };
   }
 }

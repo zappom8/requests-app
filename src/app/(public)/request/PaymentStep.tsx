@@ -59,8 +59,6 @@ export default function PaymentStep({
         await card.attach("#square-card-container");
         if (cancelled) return;
         cardRef.current = card;
-        // @ts-expect-error temporary debug hook
-        window.__realCard = card;
         // Don't setCardReady yet — Apple Pay/Google Pay setup below also
         // calls methods on this same shared `payments` object. If the user
         // can tap Pay while those are still in flight, tokenize() on the
@@ -147,7 +145,12 @@ export default function PaymentStep({
       if (result.status !== "OK" || !result.token) {
         throw new Error(result.errors?.[0]?.message ?? "Payment method wasn't accepted. Please try again.");
       }
-      await confirmTipPayment(requestId, result.token, amountCents);
+      const confirmResult = await confirmTipPayment(requestId, result.token, amountCents);
+      if (!confirmResult.success) {
+        setError(confirmResult.error);
+        setSubmitting(false);
+        return;
+      }
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Payment failed. Please try again.");
