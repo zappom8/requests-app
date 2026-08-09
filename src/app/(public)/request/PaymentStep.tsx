@@ -64,7 +64,14 @@ export default function PaymentStep({
         await card.attach("#square-card-container");
         if (cancelled) return;
         cardRef.current = card;
-        setCardReady(true);
+        // Don't setCardReady yet — Apple Pay/Google Pay setup below also
+        // calls methods on this same shared `payments` object. If the user
+        // can tap Pay while those are still in flight, tokenize() on the
+        // card intermittently fails with a generic SDK-internal error
+        // (reproduced directly: tokenize always succeeds when everything on
+        // `payments` is awaited to completion first, and fails when a
+        // wallet-method call is still pending). Wait for wallet setup to
+        // fully settle before the card becomes usable.
 
         const paymentRequest = payments.paymentRequest({
           countryCode: "AU",
@@ -103,6 +110,8 @@ export default function PaymentStep({
         } catch {
           // Google Pay unavailable — hide it, card still works.
         }
+
+        if (!cancelled) setCardReady(true);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't load payment form.");
       }
