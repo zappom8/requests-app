@@ -132,13 +132,17 @@ export default function PaymentStep({
     };
 
     try {
+      console.log("[payment debug] tokenizing with", verificationDetails);
       const result = await method.tokenize(verificationDetails);
+      console.log("[payment debug] tokenize result", result);
       if (result.status !== "OK" || !result.token) {
         throw new Error(result.errors?.[0]?.message ?? "Payment method wasn't accepted. Please try again.");
       }
+      console.log("[payment debug] confirming payment", { requestId, amountCents });
       await confirmTipPayment(requestId, result.token, amountCents);
       onSuccess();
     } catch (e) {
+      console.error("[payment debug] handlePay error", e);
       setError(e instanceof Error ? e.message : "Payment failed. Please try again.");
       setSubmitting(false);
     }
