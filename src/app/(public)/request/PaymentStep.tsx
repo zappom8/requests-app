@@ -59,6 +59,8 @@ export default function PaymentStep({
         await card.attach("#square-card-container");
         if (cancelled) return;
         cardRef.current = card;
+        // @ts-expect-error temporary debug hook
+        window.__realCard = card;
         // Don't setCardReady yet — Apple Pay/Google Pay setup below also
         // calls methods on this same shared `payments` object. If the user
         // can tap Pay while those are still in flight, tokenize() on the
