@@ -45,6 +45,11 @@ export default function PaymentStep({
         const Square = await loadSquareSdk();
         if (!Square) throw new Error("Square SDK unavailable");
 
+        console.log("[payment debug] Square.payments() config", {
+          appId: process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID,
+          locationId: process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID,
+          env: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT,
+        });
         const payments = Square.payments(
           process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID!,
           process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID!
