@@ -353,7 +353,12 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
 
   return (
     <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Request a Song</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold">Request a Song</h1>
+        <Link href="/queue" className="text-sm text-accent hover:text-accent-hover">
+          View Queue
+        </Link>
+      </div>
 
       <input
         type="text"
