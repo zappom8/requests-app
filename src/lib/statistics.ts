@@ -139,7 +139,7 @@ export async function getRequestsByDayOfWeek({ from, to }: DateRange): Promise<R
     FROM "Request"
     WHERE "requestedAt" BETWEEN ${from} AND ${to}
     GROUP BY dow
-    ORDER BY dow ASC
+    ORDER BY value DESC
   `);
   return rows.map((r) => ({ label: DOW_LABELS[r.dow], value: Number(r.value) }));
 }
@@ -150,7 +150,7 @@ export async function getRequestsByHour({ from, to }: DateRange): Promise<Ranked
     FROM "Request"
     WHERE "requestedAt" BETWEEN ${from} AND ${to}
     GROUP BY hour
-    ORDER BY hour ASC
+    ORDER BY value DESC
   `);
   return rows.map((r) => ({ label: `${r.hour}:00`, value: Number(r.value) }));
 }

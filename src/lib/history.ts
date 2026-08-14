@@ -28,7 +28,7 @@ export type HistoryItem = {
   databaseName: string;
 };
 
-function buildWhere(filters: HistoryFilters): Prisma.RequestWhereInput {
+export function buildHistoryWhere(filters: HistoryFilters): Prisma.RequestWhereInput {
   const where: Prisma.RequestWhereInput = {};
 
   if (filters.song?.trim()) {
@@ -56,7 +56,7 @@ export async function getRequestHistory(
   filters: HistoryFilters,
   cursor: string | null
 ): Promise<{ items: HistoryItem[]; nextCursor: string | null }> {
-  const where = buildWhere(filters);
+  const where = buildHistoryWhere(filters);
 
   const requests = await prisma.request.findMany({
     where,
@@ -97,4 +97,8 @@ export async function getRequestHistory(
     })),
     nextCursor: hasMore ? page[page.length - 1].id : null,
   };
+}
+
+export async function countRequestHistory(filters: HistoryFilters): Promise<number> {
+  return prisma.request.count({ where: buildHistoryWhere(filters) });
 }

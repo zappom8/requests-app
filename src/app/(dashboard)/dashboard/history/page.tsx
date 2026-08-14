@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { getRequestHistory, type HistoryFilters } from "@/lib/history";
+import { getRequestHistory, countRequestHistory, type HistoryFilters } from "@/lib/history";
 import type { RequestStatus } from "@/generated/prisma/client";
+import DeleteRequestButton from "./DeleteRequestButton";
+import DeleteAllButton from "./DeleteAllButton";
 
 export const dynamic = "force-dynamic";
 
@@ -43,9 +45,10 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const cursor = sp.cursor ?? null;
   const prevCursorsStack = sp.prevCursors ? sp.prevCursors.split(",").filter(Boolean) : [];
 
-  const [{ items, nextCursor }, databases] = await Promise.all([
+  const [{ items, nextCursor }, databases, filteredCount] = await Promise.all([
     getRequestHistory(filters, cursor),
     prisma.songDatabase.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    countRequestHistory(filters),
   ]);
 
   const filterParams = {
@@ -57,6 +60,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     dateTo: sp.dateTo,
     tip: sp.tip,
   };
+
+  const anyDateHref = sp.dateFrom || sp.dateTo ? buildQueryString({ ...filterParams, dateFrom: undefined, dateTo: undefined }) : null;
 
   const nextHref = nextCursor
     ? buildQueryString({
@@ -81,7 +86,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold mb-1">Request History</h1>
-        <p className="text-sm text-foreground-muted">Every request ever made — nothing is ever deleted.</p>
+        <p className="text-sm text-foreground-muted">Every request ever made.</p>
       </div>
 
       <form className="grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-lg border border-border bg-surface p-4">
@@ -135,6 +140,14 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           defaultValue={sp.dateTo}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
         />
+        {anyDateHref !== null && (
+          <a
+            href={`/dashboard/history${anyDateHref}`}
+            className="flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground-muted hover:text-accent hover:border-accent"
+          >
+            Any date
+          </a>
+        )}
         <select
           name="tip"
           defaultValue={sp.tip ?? "any"}
@@ -152,6 +165,10 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
         </button>
       </form>
 
+      <div className="flex justify-end">
+        <DeleteAllButton filters={filters} count={filteredCount} />
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full text-sm">
           <thead>
@@ -162,6 +179,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
               <th className="px-4 py-2 font-medium">Tip</th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Time</th>
+              <th className="px-4 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -187,11 +205,14 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                 <td className="px-4 py-2 text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
                   {item.requestedAt.toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
                 </td>
+                <td className="px-4 py-2 text-right">
+                  <DeleteRequestButton requestId={item.id} />
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-foreground-muted">
+                <td colSpan={7} className="px-4 py-8 text-center text-foreground-muted">
                   No requests match those filters.
                 </td>
               </tr>

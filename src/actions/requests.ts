@@ -6,6 +6,7 @@ import { broadcastQueueChanged } from "@/lib/supabase/server";
 import { squareClient } from "@/lib/square";
 import { SquareError } from "square";
 import type { PaymentStatus } from "@/generated/prisma/client";
+import { buildHistoryWhere, type HistoryFilters } from "@/lib/history";
 
 export type CreateRequestInput = {
   songDatabaseId: string;
@@ -155,4 +156,36 @@ export async function confirmTipPayment(
           : "Payment failed. Please try again.";
     return { success: false, error: message };
   }
+}
+
+// Permanent, hard delete — dashboard-only cleanup tool for test/junk
+// requests. Unlike the soft delete in src/actions/queue.ts (which only
+// drops a row out of the live queue view but keeps it for history), this
+// actually removes the row so it stops appearing in History, Payments, and
+// Stats. Financial fields (squarePaymentId etc.) are just deleted alongside
+// — this never touches Square itself, so a paid request should generally be
+// refunded first if the money should also go back.
+export async function permanentlyDeleteRequest(requestId: string): Promise<ActionResult> {
+  try {
+    await prisma.request.delete({ where: { id: requestId } });
+  } catch {
+    return { success: false, error: "Request not found or already deleted." };
+  }
+
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/payments");
+  revalidatePath("/dashboard/stats");
+  return { success: true };
+}
+
+// Bulk version of permanentlyDeleteRequest — removes every row matching the
+// caller's current History filters, not just the current page. Same
+// permanent, no-Square-side-effect semantics.
+export async function deleteAllFilteredRequests(filters: HistoryFilters): Promise<ActionResult<{ count: number }>> {
+  const { count } = await prisma.request.deleteMany({ where: buildHistoryWhere(filters) });
+
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/payments");
+  revalidatePath("/dashboard/stats");
+  return { success: true, count };
 }
