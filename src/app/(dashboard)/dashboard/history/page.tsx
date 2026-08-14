@@ -45,15 +45,36 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const cursor = sp.cursor ?? null;
   const prevCursorsStack = sp.prevCursors ? sp.prevCursors.split(",").filter(Boolean) : [];
 
+  // Song/artist filter options come from the real catalog (the "Footdrums
+  // ALL" database), not from distinct names seen in Request history — the
+  // latter is polluted with one-off test song/artist names from testing the
+  // request flow, and wouldn't include catalog songs that haven't been
+  // requested yet.
+  const catalogDatabase = await prisma.songDatabase.findFirst({ where: { name: "Footdrums ALL" }, select: { id: true } });
+
   const [{ items, nextCursor }, databases, filteredCount, songRows, artistRows] = await Promise.all([
     getRequestHistory(filters, cursor),
     prisma.songDatabase.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     countRequestHistory(filters),
-    prisma.request.findMany({ distinct: ["songName"], select: { songName: true }, orderBy: { songName: "asc" } }),
-    prisma.request.findMany({ distinct: ["artistName"], select: { artistName: true }, orderBy: { artistName: "asc" } }),
+    catalogDatabase
+      ? prisma.song.findMany({
+          where: { songDatabaseId: catalogDatabase.id },
+          distinct: ["name"],
+          select: { name: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
+    catalogDatabase
+      ? prisma.song.findMany({
+          where: { songDatabaseId: catalogDatabase.id },
+          distinct: ["artist"],
+          select: { artist: true },
+          orderBy: { artist: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
-  const songNames = songRows.map((r) => r.songName);
-  const artistNames = artistRows.map((r) => r.artistName);
+  const songNames = songRows.map((r) => r.name);
+  const artistNames = artistRows.map((r) => r.artist);
 
   const filterParams = {
     song: sp.song,
