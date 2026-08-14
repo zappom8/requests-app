@@ -3,6 +3,7 @@ import { getRequestHistory, countRequestHistory, type HistoryFilters } from "@/l
 import type { RequestStatus } from "@/generated/prisma/client";
 import DeleteRequestButton from "./DeleteRequestButton";
 import DeleteAllButton from "./DeleteAllButton";
+import DateRangeInputs from "./DateRangeInputs";
 
 export const dynamic = "force-dynamic";
 
@@ -163,18 +164,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
             </option>
           ))}
         </select>
-        <input
-          type="date"
-          name="dateFrom"
-          defaultValue={sp.dateFrom}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        />
-        <input
-          type="date"
-          name="dateTo"
-          defaultValue={sp.dateTo}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        />
+        <DateRangeInputs dateFrom={sp.dateFrom} dateTo={sp.dateTo} />
         {anyDateHref !== null && (
           <a
             href={`/dashboard/history${anyDateHref}`}
