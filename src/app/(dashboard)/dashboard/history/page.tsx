@@ -45,11 +45,15 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const cursor = sp.cursor ?? null;
   const prevCursorsStack = sp.prevCursors ? sp.prevCursors.split(",").filter(Boolean) : [];
 
-  const [{ items, nextCursor }, databases, filteredCount] = await Promise.all([
+  const [{ items, nextCursor }, databases, filteredCount, songRows, artistRows] = await Promise.all([
     getRequestHistory(filters, cursor),
     prisma.songDatabase.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     countRequestHistory(filters),
+    prisma.request.findMany({ distinct: ["songName"], select: { songName: true }, orderBy: { songName: "asc" } }),
+    prisma.request.findMany({ distinct: ["artistName"], select: { artistName: true }, orderBy: { artistName: "asc" } }),
   ]);
+  const songNames = songRows.map((r) => r.songName);
+  const artistNames = artistRows.map((r) => r.artistName);
 
   const filterParams = {
     song: sp.song,
@@ -90,20 +94,30 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       </div>
 
       <form className="grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-lg border border-border bg-surface p-4">
-        <input
-          type="text"
+        <select
           name="song"
-          defaultValue={sp.song}
-          placeholder="Song"
+          defaultValue={sp.song ?? ""}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        />
-        <input
-          type="text"
+        >
+          <option value="">Any song</option>
+          {songNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <select
           name="artist"
-          defaultValue={sp.artist}
-          placeholder="Artist"
+          defaultValue={sp.artist ?? ""}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        />
+        >
+          <option value="">Any artist</option>
+          {artistNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
         <select
           name="status"
           defaultValue={sp.status ?? ""}
