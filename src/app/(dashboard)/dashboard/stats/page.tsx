@@ -10,6 +10,7 @@ import {
   getMonthly,
   getRequestsByDayOfWeek,
   getRequestsByHour,
+  DOW_LABELS,
   type RankedLabel,
   type RankedSong,
 } from "@/lib/statistics";
@@ -66,10 +67,11 @@ function LabelList({ title, rows, moneyValue = false }: { title: string; rows: R
 export default async function StatsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dateFrom?: string; dateTo?: string }>;
+  searchParams: Promise<{ dateFrom?: string; dateTo?: string; days?: string | string[] }>;
 }) {
   const sp = await searchParams;
-  const range = resolveDateRange(sp.dateFrom, sp.dateTo);
+  const selectedDays = sp.days === undefined ? [] : Array.isArray(sp.days) ? sp.days : [sp.days];
+  const range = resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays);
 
   const [
     overview,
@@ -120,6 +122,23 @@ export default async function StatsPage({
             defaultValue={sp.dateTo}
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
           />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-foreground-muted">Days</label>
+          <div className="flex flex-wrap gap-2 py-2">
+            {DOW_LABELS.map((label, i) => (
+              <label key={label} className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  name="days"
+                  value={i}
+                  defaultChecked={selectedDays.includes(String(i))}
+                  className="h-4 w-4 accent-accent"
+                />
+                {label.slice(0, 3)}
+              </label>
+            ))}
+          </div>
         </div>
         <button
           type="submit"
