@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AdminQueueItem } from "@/lib/queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { markPlayed, deleteRequest } from "@/actions/queue";
@@ -8,6 +8,14 @@ import { markPlayed, deleteRequest } from "@/actions/queue";
 type SerializedItem = Omit<AdminQueueItem, "requestedAt"> & { requestedAt: string };
 
 const FALLBACK_POLL_MS = 30000;
+// Marking several songs played in quick succession fires one broadcast per
+// action — each triggers a refetch, and those requests can resolve out of
+// order, letting a stale response overwrite a fresher optimistic state
+// (an already-played song reappearing in the list). Debouncing collapses a
+// burst of broadcasts into one refetch after things settle, and the
+// sequence guard below drops any response that's no longer the latest one
+// in flight, so this can't happen even under network reordering.
+const REFETCH_DEBOUNCE_MS = 400;
 
 export default function LiveQueueList({
   initialQueue,
@@ -18,30 +26,42 @@ export default function LiveQueueList({
 }) {
   const [queue, setQueue] = useState(initialQueue);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const refetchSeq = useRef(0);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function refetch() {
+    async function refetchNow() {
+      const seq = ++refetchSeq.current;
       try {
         const res = await fetch("/api/dashboard/queue", { cache: "no-store" });
         const data = await res.json();
-        if (!cancelled) setQueue(data.queue ?? []);
+        // Ignore this response if a newer refetch has started since it was
+        // sent — otherwise a slower, older request can resolve after a
+        // faster, newer one and clobber the fresher state with stale data.
+        if (!cancelled && seq === refetchSeq.current) setQueue(data.queue ?? []);
       } catch {
         // transient network error — next broadcast or fallback poll will retry
       }
     }
 
+    function scheduleRefetch() {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(refetchNow, REFETCH_DEBOUNCE_MS);
+    }
+
     const supabase = getSupabaseBrowserClient();
     const channel = supabase
       .channel(`queue:${songDatabaseId}`)
-      .on("broadcast", { event: "queue-changed" }, () => refetch())
+      .on("broadcast", { event: "queue-changed" }, () => scheduleRefetch())
       .subscribe();
 
-    const fallback = setInterval(refetch, FALLBACK_POLL_MS);
+    const fallback = setInterval(refetchNow, FALLBACK_POLL_MS);
 
     return () => {
       cancelled = true;
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
       clearInterval(fallback);
       channel.unsubscribe();
     };
