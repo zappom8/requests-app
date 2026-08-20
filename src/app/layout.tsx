@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LOCHIE ONE MAN BAND",
+  title: "LOCHIE GIG",
   description: "Request a song live — powered by Lochie",
 };
 
