@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createSong } from "@/actions/songs";
-import SongRow from "./SongRow";
+import SongList from "./SongList";
 import CsvImportForm from "./CsvImportForm";
 
 export default async function SongManagerPage({
@@ -69,23 +69,7 @@ export default async function SongManagerPage({
         </button>
       </form>
 
-      <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
-        {database.songs.map((song) => (
-          <SongRow
-            key={song.id}
-            id={song.id}
-            songDatabaseId={database.id}
-            name={song.name}
-            artist={song.artist}
-            decade={song.decade}
-          />
-        ))}
-        {database.songs.length === 0 && (
-          <li className="px-4 py-6 text-sm text-foreground-muted text-center">
-            No songs yet — add one above.
-          </li>
-        )}
-      </ul>
+      <SongList songDatabaseId={database.id} songs={database.songs} />
     </div>
   );
 }
