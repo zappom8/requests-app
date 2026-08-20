@@ -11,17 +11,29 @@ export function resolveDateRange(dateFrom?: string, dateTo?: string, days?: stri
     ?.map((d) => Number(d))
     .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
   return {
-    from: dateFrom ? new Date(`${dateFrom}T00:00:00`) : new Date(0),
-    to: dateTo ? new Date(`${dateTo}T23:59:59.999`) : new Date(),
+    // Explicit +10:00 (not left to the server process's own timezone,
+    // which on Vercel defaults to UTC) so "dateFrom: Aug 14" means the
+    // start of Aug 14 in Brisbane, not 10am Brisbane time.
+    from: dateFrom ? new Date(`${dateFrom}T00:00:00+10:00`) : new Date(0),
+    to: dateTo ? new Date(`${dateTo}T23:59:59.999+10:00`) : new Date(),
     ...(daysOfWeek && daysOfWeek.length > 0 ? { daysOfWeek } : {}),
   };
 }
+
+// requestedAt is stored as a UTC instant (timestamptz); the DB session's
+// timezone is UTC by default, so a bare EXTRACT(HOUR/DOW FROM ...) or
+// date_trunc('month', ...) reports the UTC hour/day/month, not the gig's
+// actual local one. Brisbane (this business's location, per its Square
+// Locations entry) never observes daylight saving, so a fixed offset
+// conversion is safe year-round with no DST edge cases to worry about.
+const LOCAL_TZ = "Australia/Brisbane";
+const localRequestedAt = Prisma.sql`("requestedAt" AT TIME ZONE ${LOCAL_TZ})`;
 
 // Appended to a raw query's WHERE clause after the requestedAt BETWEEN
 // condition. Empty fragment when no day-of-week filter is active.
 function dowFilter(daysOfWeek: number[] | undefined) {
   if (!daysOfWeek || daysOfWeek.length === 0) return Prisma.sql``;
-  return Prisma.sql`AND EXTRACT(DOW FROM "requestedAt")::int IN (${Prisma.join(daysOfWeek)})`;
+  return Prisma.sql`AND EXTRACT(DOW FROM ${localRequestedAt})::int IN (${Prisma.join(daysOfWeek)})`;
 }
 
 export type Overview = {
@@ -145,7 +157,7 @@ export type MonthlyPoint = { month: string; requests: number; tipCents: number }
 
 export async function getMonthly({ from, to, daysOfWeek }: DateRange): Promise<MonthlyPoint[]> {
   const rows = await prisma.$queryRaw<{ month: Date; requests: bigint; tipcents: bigint }[]>(Prisma.sql`
-    SELECT date_trunc('month', "requestedAt") AS month, COUNT(*) AS requests, SUM("tipAmountCents") AS tipcents
+    SELECT date_trunc('month', ${localRequestedAt}) AS month, COUNT(*) AS requests, SUM("tipAmountCents") AS tipcents
     FROM "Request"
     WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
     GROUP BY month
@@ -162,7 +174,7 @@ export const DOW_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday
 
 export async function getRequestsByDayOfWeek({ from, to, daysOfWeek }: DateRange): Promise<RankedLabel[]> {
   const rows = await prisma.$queryRaw<{ dow: number; value: bigint }[]>(Prisma.sql`
-    SELECT EXTRACT(DOW FROM "requestedAt")::int AS dow, COUNT(*) AS value
+    SELECT EXTRACT(DOW FROM ${localRequestedAt})::int AS dow, COUNT(*) AS value
     FROM "Request"
     WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
     GROUP BY dow
@@ -173,7 +185,7 @@ export async function getRequestsByDayOfWeek({ from, to, daysOfWeek }: DateRange
 
 export async function getRequestsByHour({ from, to, daysOfWeek }: DateRange): Promise<RankedLabel[]> {
   const rows = await prisma.$queryRaw<{ hour: number; value: bigint }[]>(Prisma.sql`
-    SELECT EXTRACT(HOUR FROM "requestedAt")::int AS hour, COUNT(*) AS value
+    SELECT EXTRACT(HOUR FROM ${localRequestedAt})::int AS hour, COUNT(*) AS value
     FROM "Request"
     WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
     GROUP BY hour
