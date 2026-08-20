@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import DashboardHeader from "./DashboardHeader";
+
+export const metadata: Metadata = {
+  title: "OPERATOR",
+};
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
