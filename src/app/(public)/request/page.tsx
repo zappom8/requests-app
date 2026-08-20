@@ -19,17 +19,33 @@ export default async function RequestPage() {
     );
   }
 
-  const [songs, settings] = await Promise.all([
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+  const [songs, settings, recentlyPlayedRequests] = await Promise.all([
     prisma.song.findMany({
       where: { songDatabaseId: activeSongDatabaseId },
       orderBy: { name: "asc" },
       select: { id: true, name: true, artist: true, decade: true },
     }),
     prisma.settings.findUnique({ where: { id: 1 }, select: { defaultTipAmountsCents: true } }),
+    prisma.request.findMany({
+      where: { songDatabaseId: activeSongDatabaseId, status: "PLAYED", playedAt: { gte: oneHourAgo }, songId: { not: null } },
+      select: { songId: true, playedAt: true },
+      orderBy: { playedAt: "desc" },
+    }),
   ]);
 
   const artists = Array.from(new Set(songs.map((s) => s.artist))).sort();
   const decades = Array.from(new Set(songs.map((s) => s.decade).filter((d): d is string => !!d))).sort();
+
+  // Keep only the most recent play per song — requests are ordered newest
+  // first above, so the first entry seen per songId wins.
+  const recentlyPlayed: Record<string, string> = {};
+  for (const r of recentlyPlayedRequests) {
+    if (r.songId && !(r.songId in recentlyPlayed)) {
+      recentlyPlayed[r.songId] = r.playedAt!.toISOString();
+    }
+  }
 
   return (
     <RequestFlow
@@ -38,6 +54,7 @@ export default async function RequestPage() {
       artists={artists}
       decades={decades}
       tipPresetsCents={settings?.defaultTipAmountsCents ?? [500, 1000, 2000]}
+      recentlyPlayed={recentlyPlayed}
     />
   );
 }

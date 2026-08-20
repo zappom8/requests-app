@@ -13,13 +13,21 @@ type Props = {
   artists: string[];
   decades: string[];
   tipPresetsCents: number[];
+  recentlyPlayed: Record<string, string>;
 };
 
 type Step = "browse" | "details" | "payment" | "confirmation";
 type BrowseMode = "songs" | "artists" | "decades";
 type TipOption = number | "other" | null;
 
-export default function RequestFlow({ songDatabaseId, initialSongs, artists, decades, tipPresetsCents }: Props) {
+export default function RequestFlow({
+  songDatabaseId,
+  initialSongs,
+  artists,
+  decades,
+  tipPresetsCents,
+  recentlyPlayed,
+}: Props) {
   const tipPresets = tipPresetsCents.map((cents) => ({ cents, label: `$${(cents / 100).toFixed(0)}` }));
   const [step, setStep] = useState<Step>("browse");
   const [browseMode, setBrowseMode] = useState<BrowseMode>("songs");
@@ -38,6 +46,7 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
   const [error, setError] = useState<string | null>(null);
 
   const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
+  const [recentlyPlayedPrompt, setRecentlyPlayedPrompt] = useState<SongResult | null>(null);
 
   const tipAmountCents = useMemo(() => {
     if (tipOption === null) return 0;
@@ -121,15 +130,23 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
     return [];
   }, [searchQuery, searchResults, browseMode, selectedArtist, selectedDecade, initialSongs]);
 
+  function goToDetails(song: SongResult) {
+    setSelectedSong(song);
+    setStep("details");
+    setError(null);
+  }
+
   function selectSong(song: SongResult) {
     const trimmed = searchQuery.trim();
     if (trimmed && !searchLoggedRef.current) {
       searchLoggedRef.current = true;
       logSearch({ songDatabaseId, searchTerm: trimmed, resultsFound: true, eventType: "select" });
     }
-    setSelectedSong(song);
-    setStep("details");
-    setError(null);
+    if (recentlyPlayed[song.id]) {
+      setRecentlyPlayedPrompt(song);
+      return;
+    }
+    goToDetails(song);
   }
 
   function backToBrowse() {
@@ -359,6 +376,32 @@ export default function RequestFlow({ songDatabaseId, initialSongs, artists, dec
           View Queue
         </Link>
       </div>
+
+      {recentlyPlayedPrompt && (
+        <div className="fixed inset-x-4 bottom-6 z-30 mx-auto max-w-sm rounded-lg border border-border bg-surface p-4 shadow-lg">
+          <p className="text-sm">
+            <span className="font-medium">{recentlyPlayedPrompt.name}</span> was played in the last hour.
+          </p>
+          <p className="text-sm text-foreground-muted mt-1">Request something else?</p>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => setRecentlyPlayedPrompt(null)}
+              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-accent"
+            >
+              Choose another
+            </button>
+            <button
+              onClick={() => {
+                goToDetails(recentlyPlayedPrompt);
+                setRecentlyPlayedPrompt(null);
+              }}
+              className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              Request anyway
+            </button>
+          </div>
+        </div>
+      )}
 
       <input
         type="text"
