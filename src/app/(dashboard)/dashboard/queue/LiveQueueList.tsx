@@ -47,21 +47,21 @@ export default function LiveQueueList({
     };
   }, [songDatabaseId]);
 
-  async function handlePlayed(id: string) {
-    setPendingActionId(id);
-    setQueue((q) => q.filter((item) => item.id !== id)); // optimistic
+  async function handlePlayed(item: SerializedItem) {
+    setPendingActionId(item.id);
+    setQueue((q) => q.filter((i) => i.id !== item.id)); // optimistic
     try {
-      await markPlayed(id);
+      await markPlayed(item.requestIds, songDatabaseId);
     } finally {
       setPendingActionId(null);
     }
   }
 
-  async function handleDelete(id: string) {
-    setPendingActionId(id);
-    setQueue((q) => q.filter((item) => item.id !== id)); // optimistic
+  async function handleDelete(item: SerializedItem) {
+    setPendingActionId(item.id);
+    setQueue((q) => q.filter((i) => i.id !== item.id)); // optimistic
     try {
-      await deleteRequest(id);
+      await deleteRequest(item.requestIds, songDatabaseId);
     } finally {
       setPendingActionId(null);
     }
@@ -75,7 +75,7 @@ export default function LiveQueueList({
       if (e.code !== "Space" && e.key !== "Enter") return;
       e.preventDefault();
       const top = queue[0];
-      if (top && pendingActionId !== top.id) handlePlayed(top.id);
+      if (top && pendingActionId !== top.id) handlePlayed(top);
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -107,6 +107,8 @@ export default function LiveQueueList({
             <div className="text-sm">
               <p>
                 Requested by <span className="font-medium">{item.requesterName}</span>
+                {item.otherRequesterCount > 0 &&
+                  ` and ${item.otherRequesterCount} other${item.otherRequesterCount === 1 ? "" : "s"}`}
               </p>
               {item.wantsShoutOut && <p className="text-tip font-medium">⭐ Wants a shout-out</p>}
               {item.tipAmountCents > 0 && (
@@ -118,7 +120,7 @@ export default function LiveQueueList({
             </div>
 
             <button
-              onClick={() => handleDelete(item.id)}
+              onClick={() => handleDelete(item)}
               disabled={pendingActionId === item.id}
               className="self-start rounded-lg border border-danger/50 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
             >
@@ -127,7 +129,7 @@ export default function LiveQueueList({
           </div>
 
           <button
-            onClick={() => handlePlayed(item.id)}
+            onClick={() => handlePlayed(item)}
             disabled={pendingActionId === item.id}
             className="w-24 shrink-0 rounded-xl bg-success text-background text-lg font-bold disabled:opacity-50 flex items-center justify-center"
           >
