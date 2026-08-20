@@ -378,27 +378,35 @@ export default function RequestFlow({
       </div>
 
       {recentlyPlayedPrompt && (
-        <div className="fixed inset-x-4 bottom-6 z-30 mx-auto max-w-sm rounded-lg border border-border bg-surface p-4 shadow-lg">
-          <p className="text-sm">
-            <span className="font-medium">{recentlyPlayedPrompt.name}</span> was played in the last hour.
-          </p>
-          <p className="text-sm text-foreground-muted mt-1">Request something else?</p>
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={() => setRecentlyPlayedPrompt(null)}
-              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-accent"
-            >
-              Choose another
-            </button>
-            <button
-              onClick={() => {
-                goToDetails(recentlyPlayedPrompt);
-                setRecentlyPlayedPrompt(null);
-              }}
-              className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-            >
-              Request anyway
-            </button>
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-background/70 p-4"
+          onClick={() => setRecentlyPlayedPrompt(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-lg border border-border bg-surface p-4 shadow-lg"
+          >
+            <p className="text-sm">
+              <span className="font-medium">{recentlyPlayedPrompt.name}</span> was played in the last hour.
+            </p>
+            <p className="text-sm text-foreground-muted mt-1">Request something else?</p>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => setRecentlyPlayedPrompt(null)}
+                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-accent"
+              >
+                Choose another
+              </button>
+              <button
+                onClick={() => {
+                  goToDetails(recentlyPlayedPrompt);
+                  setRecentlyPlayedPrompt(null);
+                }}
+                className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+              >
+                Request anyway
+              </button>
+            </div>
           </div>
         </div>
       )}
