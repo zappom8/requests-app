@@ -7,6 +7,7 @@ export const HISTORY_PAGE_SIZE = 30;
 export type HistoryFilters = {
   song?: string;
   artist?: string;
+  requester?: string;
   status?: RequestStatus;
   songDatabaseId?: string;
   dateFrom?: string; // YYYY-MM-DD
@@ -36,6 +37,15 @@ export function buildHistoryWhere(filters: HistoryFilters): Prisma.RequestWhereI
   }
   if (filters.artist?.trim()) {
     where.artistName = { contains: filters.artist.trim(), mode: "insensitive" };
+  }
+  if (filters.requester?.trim()) {
+    // The Requester column shows billingName || requesterName, so match
+    // whichever one is actually visible there.
+    const q = filters.requester.trim();
+    where.OR = [
+      { requesterName: { contains: q, mode: "insensitive" } },
+      { billingName: { contains: q, mode: "insensitive" } },
+    ];
   }
   if (filters.status) where.status = filters.status;
   if (filters.songDatabaseId) where.songDatabaseId = filters.songDatabaseId;

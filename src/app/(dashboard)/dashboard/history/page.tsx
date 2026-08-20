@@ -12,6 +12,7 @@ const STATUS_OPTIONS: RequestStatus[] = ["QUEUED", "PLAYED", "DELETED"];
 type SearchParams = {
   song?: string;
   artist?: string;
+  requester?: string;
   status?: string;
   songDatabaseId?: string;
   dateFrom?: string;
@@ -36,6 +37,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const filters: HistoryFilters = {
     song: sp.song,
     artist: sp.artist,
+    requester: sp.requester,
     status: STATUS_OPTIONS.includes(sp.status as RequestStatus) ? (sp.status as RequestStatus) : undefined,
     songDatabaseId: sp.songDatabaseId,
     dateFrom: sp.dateFrom,
@@ -80,6 +82,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const filterParams = {
     song: sp.song,
     artist: sp.artist,
+    requester: sp.requester,
     status: sp.status,
     songDatabaseId: sp.songDatabaseId,
     dateFrom: sp.dateFrom,
@@ -140,6 +143,13 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
             </option>
           ))}
         </select>
+        <input
+          type="text"
+          name="requester"
+          defaultValue={sp.requester}
+          placeholder="Requester contains…"
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+        />
         <select
           name="status"
           defaultValue={sp.status ?? ""}
