@@ -83,19 +83,19 @@ export type PublicQueueItem = {
   id: string;
   songName: string;
   artistName: string;
-  requestCount: number;
 };
 
 // Public payload only — never requesterName, wantsShoutOut, tipAmountCents,
-// paymentStatus, or any payment-provider field. requestCount is safe to
-// show (just "N people requested this"), no names attached.
+// paymentStatus, or any payment-provider field. Deliberately omits how many
+// people requested a song too, even though it's grouped/boosted the same
+// way the admin queue is — showing that number would invite people to spam
+// requests for a song just to watch (and inflate) the count.
 export async function getPublicQueue(songDatabaseId: string): Promise<PublicQueueItem[]> {
   const groups = await getGroupedQueue(songDatabaseId);
   return groups.map((g) => ({
     id: g.requestIds[0],
     songName: g.songName,
     artistName: g.artistName,
-    requestCount: g.requestIds.length,
   }));
 }
 

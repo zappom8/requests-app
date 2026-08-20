@@ -57,13 +57,10 @@ export default function QueueList({
       {queue.map((item, index) => (
         <li key={item.id} className="flex items-baseline gap-3 px-4 py-3">
           <span className="text-foreground-muted text-sm w-6 shrink-0">{index + 1}.</span>
-          <div className="flex-1 min-w-0">
+          <div>
             <p className="font-medium">{item.songName}</p>
             <p className="text-xs text-foreground-muted">{item.artistName}</p>
           </div>
-          {item.requestCount > 1 && (
-            <span className="text-xs font-medium text-accent shrink-0">{item.requestCount} requests</span>
-          )}
         </li>
       ))}
     </ol>
