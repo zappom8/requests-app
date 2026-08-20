@@ -6,6 +6,39 @@ import { revalidatePath } from "next/cache";
 
 const SETTINGS_ID = 1;
 
+// Matches Supabase's "branding" bucket cap — checked here too so a bad
+// upload fails fast with a clear message instead of Supabase's own error.
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+// The <input accept="image/..."> and file.type/file.name on the client are
+// both attacker-controlled — a request straight to this action can claim
+// any type or filename it likes. Sniffing the actual file bytes' magic
+// number is what actually proves the upload is one of these image formats,
+// and the extension/content-type used for the Supabase upload below comes
+// from this detection, never from the client-supplied name or MIME type.
+const IMAGE_SIGNATURES: { mime: string; ext: string; check: (b: Uint8Array) => boolean }[] = [
+  { mime: "image/png", ext: "png", check: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+  { mime: "image/jpeg", ext: "jpg", check: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { mime: "image/gif", ext: "gif", check: (b) => b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38 },
+  {
+    mime: "image/webp",
+    ext: "webp",
+    check: (b) =>
+      b[0] === 0x52 &&
+      b[1] === 0x49 &&
+      b[2] === 0x46 &&
+      b[3] === 0x46 &&
+      b[8] === 0x57 &&
+      b[9] === 0x45 &&
+      b[10] === 0x42 &&
+      b[11] === 0x50,
+  },
+];
+
+function detectImageType(bytes: Uint8Array): { mime: string; ext: string } | null {
+  return IMAGE_SIGNATURES.find((sig) => sig.check(bytes)) ?? null;
+}
+
 function optionalString(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
   return value || null;
@@ -72,14 +105,25 @@ export async function uploadBrandingImage(formData: FormData) {
     throw new Error("field and file are required");
   }
 
-  const ext = file.name.split(".").pop() || "png";
-  const path = `${field}-${Date.now()}.${ext}`;
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error("Image must be 5MB or smaller.");
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const detected = detectImageType(bytes);
+  if (!detected) {
+    throw new Error("File isn't a recognized image format (PNG, JPEG, GIF, or WebP).");
+  }
+
+  const path = `${field}-${Date.now()}.${detected.ext}`;
 
   const supabase = getSupabaseAdminClient();
-  const { error: uploadError } = await supabase.storage.from("branding").upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  });
+  const { error: uploadError } = await supabase.storage
+    .from("branding")
+    .upload(path, new Blob([bytes], { type: detected.mime }), {
+      contentType: detected.mime,
+      upsert: false,
+    });
   if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
   const { data } = supabase.storage.from("branding").getPublicUrl(path);
