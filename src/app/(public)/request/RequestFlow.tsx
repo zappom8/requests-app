@@ -158,6 +158,9 @@ export default function RequestFlow({
     setOtherAmountDollars("");
     setCreatedRequestId(null);
     setError(null);
+    setSearchQuery("");
+    setSearchResults(null);
+    searchLoggedRef.current = false;
   }
 
   async function handleContinue() {
