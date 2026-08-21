@@ -132,7 +132,10 @@ export default function LiveQueueList({
               </p>
               {item.wantsShoutOut && <p className="text-tip font-medium">⭐ Wants a shout-out</p>}
               {item.tipAmountCents > 0 && (
-                <p className="text-tip font-semibold mt-1">Tipped ${(item.tipAmountCents / 100).toFixed(2)}</p>
+                <p className="text-tip font-semibold mt-1">
+                  Tipped ${(item.tipAmountCents / 100).toFixed(2)}
+                  {item.otherRequesterCount > 0 && ` by ${item.requesterName}`}
+                </p>
               )}
               {item.paymentStatus === "PENDING" && (
                 <p className="text-xs text-foreground-muted mt-1">Tip payment in progress…</p>
