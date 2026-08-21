@@ -4,6 +4,7 @@ import type { RequestStatus } from "@/generated/prisma/client";
 import DeleteRequestButton from "./DeleteRequestButton";
 import DeleteAllButton from "./DeleteAllButton";
 import DateRangeInputs from "./DateRangeInputs";
+import LocalTime from "../../LocalTime";
 
 export const dynamic = "force-dynamic";
 
@@ -237,8 +238,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                   )}
                 </td>
                 <td className="px-4 py-2 text-foreground-muted">{item.status}</td>
-                <td className="px-4 py-2 text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
-                  {item.requestedAt.toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                <td className="px-4 py-2 text-foreground-muted whitespace-nowrap">
+                  <LocalTime iso={item.requestedAt.toISOString()} />
                 </td>
                 <td className="px-4 py-2 text-right">
                   <DeleteRequestButton requestId={item.id} />

@@ -1,5 +1,6 @@
 import { getPayments } from "@/lib/payments";
 import RefundButton from "./RefundButton";
+import LocalTime from "../../LocalTime";
 
 export const dynamic = "force-dynamic";
 
@@ -110,8 +111,8 @@ export default async function PaymentsPage({
                 </td>
                 <td className="px-4 py-2 text-foreground-muted">{item.paymentStatus}</td>
                 <td className="px-4 py-2 text-foreground-muted capitalize">{item.provider ?? "—"}</td>
-                <td className="px-4 py-2 text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
-                  {item.requestedAt.toLocaleDateString([], { dateStyle: "short" })}
+                <td className="px-4 py-2 text-foreground-muted whitespace-nowrap">
+                  <LocalTime iso={item.requestedAt.toISOString()} dateOnly />
                 </td>
                 <td className="px-4 py-2 text-right">
                   {item.paymentStatus === "SUCCEEDED" &&
