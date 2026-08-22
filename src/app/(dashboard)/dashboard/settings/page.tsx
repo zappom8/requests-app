@@ -112,6 +112,17 @@ export default async function SettingsPage() {
           </div>
         </div>
 
+        <h2 className="text-sm font-medium pt-2">Request Behaviour</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="disableRecentlyPlayedPrompt"
+            defaultChecked={settings?.disableRecentlyPlayedPrompt ?? false}
+            className="h-4 w-4 accent-accent"
+          />
+          Disable the &quot;this was played recently&quot; pop-up on the request page
+        </label>
+
         <button
           type="submit"
           className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"

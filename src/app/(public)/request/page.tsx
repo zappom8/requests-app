@@ -27,7 +27,10 @@ export default async function RequestPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, artist: true, decade: true },
     }),
-    prisma.settings.findUnique({ where: { id: 1 }, select: { defaultTipAmountsCents: true } }),
+    prisma.settings.findUnique({
+      where: { id: 1 },
+      select: { defaultTipAmountsCents: true, disableRecentlyPlayedPrompt: true },
+    }),
     prisma.request.findMany({
       where: { songDatabaseId: activeSongDatabaseId, status: "PLAYED", playedAt: { gte: oneHourAgo }, songId: { not: null } },
       select: { songId: true, playedAt: true },
@@ -55,6 +58,7 @@ export default async function RequestPage() {
       decades={decades}
       tipPresetsCents={settings?.defaultTipAmountsCents ?? [500, 1000, 2000]}
       recentlyPlayed={recentlyPlayed}
+      recentlyPlayedPromptEnabled={!settings?.disableRecentlyPlayedPrompt}
     />
   );
 }

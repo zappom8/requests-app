@@ -55,6 +55,7 @@ export async function updateSettings(formData: FormData) {
   const contactEmail = optionalString(formData, "contactEmail");
   const brandPrimaryColor = optionalString(formData, "brandPrimaryColor");
   const brandSecondaryColor = optionalString(formData, "brandSecondaryColor");
+  const disableRecentlyPlayedPrompt = formData.get("disableRecentlyPlayedPrompt") === "on";
 
   const tipAmountsRaw = String(formData.get("defaultTipAmounts") ?? "");
   const defaultTipAmountsCents = tipAmountsRaw
@@ -75,6 +76,7 @@ export async function updateSettings(formData: FormData) {
       contactEmail,
       brandPrimaryColor,
       brandSecondaryColor,
+      disableRecentlyPlayedPrompt,
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
     create: {
@@ -89,6 +91,7 @@ export async function updateSettings(formData: FormData) {
       contactEmail,
       brandPrimaryColor,
       brandSecondaryColor,
+      disableRecentlyPlayedPrompt,
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
   });

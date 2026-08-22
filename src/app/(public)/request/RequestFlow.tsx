@@ -14,6 +14,7 @@ type Props = {
   decades: string[];
   tipPresetsCents: number[];
   recentlyPlayed: Record<string, string>;
+  recentlyPlayedPromptEnabled: boolean;
 };
 
 type Step = "browse" | "details" | "payment" | "confirmation";
@@ -27,6 +28,7 @@ export default function RequestFlow({
   decades,
   tipPresetsCents,
   recentlyPlayed,
+  recentlyPlayedPromptEnabled,
 }: Props) {
   const tipPresets = tipPresetsCents.map((cents) => ({ cents, label: `$${(cents / 100).toFixed(0)}` }));
   const [step, setStep] = useState<Step>("browse");
@@ -142,7 +144,7 @@ export default function RequestFlow({
       searchLoggedRef.current = true;
       logSearch({ songDatabaseId, searchTerm: trimmed, resultsFound: true, eventType: "select" });
     }
-    if (recentlyPlayed[song.id]) {
+    if (recentlyPlayedPromptEnabled && recentlyPlayed[song.id]) {
       setRecentlyPlayedPrompt(song);
       return;
     }
