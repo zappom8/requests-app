@@ -44,6 +44,7 @@ model Song {
   name           String
   artist         String
   decade         String?
+  genres         String[]     @default([])
   requests       Request[]
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
@@ -126,5 +127,6 @@ model Settings {
   defaultTipAmountsCents Int[]    @default([500, 1000, 2000])
   brandPrimaryColor      String?
   brandSecondaryColor    String?
+  disableRecentlyPlayedPrompt Boolean @default(false)
   updatedAt              DateTime @updatedAt @db.Timestamptz(3)
 }
