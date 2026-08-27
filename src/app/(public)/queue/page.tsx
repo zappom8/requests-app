@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getActiveSongDatabaseId } from "@/lib/settings";
 import { getPublicQueue } from "@/lib/queue";
 import QueueList from "./QueueList";
+import PromoLinks from "../PromoLinks";
 
 // Initial paint must reflect the current queue — Realtime Broadcast then keeps it live.
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function QueuePage() {
           Request a song
         </Link>
       </div>
+      <PromoLinks />
       {activeSongDatabaseId && (
         <QueueList initialQueue={queue} songDatabaseId={activeSongDatabaseId} />
       )}

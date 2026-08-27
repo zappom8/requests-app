@@ -6,6 +6,7 @@ import { createRequest, createRequestWithTip } from "@/actions/requests";
 import { logSearch } from "@/actions/search-log";
 import type { SongResult } from "@/lib/search";
 import PaymentStep from "./PaymentStep";
+import PromoLinks from "../PromoLinks";
 
 type Props = {
   songDatabaseId: string;
@@ -381,6 +382,7 @@ export default function RequestFlow({
           View Queue
         </Link>
       </div>
+      <PromoLinks />
 
       {recentlyPlayedPrompt && (
         <div
