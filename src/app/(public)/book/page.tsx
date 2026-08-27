@@ -6,9 +6,14 @@ export default function BookPage() {
     <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Book Lochie</h1>
-        <Link href="/gigs" className="text-sm text-accent hover:text-accent-hover">
-          Upcoming Gigs
-        </Link>
+        <div className="flex items-center gap-3 text-sm shrink-0">
+          <Link href="/request" className="text-accent hover:text-accent-hover">
+            Request a Song
+          </Link>
+          <Link href="/gigs" className="text-accent hover:text-accent-hover">
+            Upcoming Gigs
+          </Link>
+        </div>
       </div>
       <p className="text-sm text-foreground-muted -mt-2">
         Planning an event and want live music? Send through the details and Lochie will be in touch.

@@ -66,8 +66,14 @@ export default async function ProfilePage() {
 
       <div className="flex flex-col gap-3 w-full max-w-xs">
         <Link
-          href="/queue"
+          href="/request"
           className="rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground hover:bg-accent-hover text-center"
+        >
+          Request a Song
+        </Link>
+        <Link
+          href="/queue"
+          className="rounded-lg border border-border px-4 py-3 text-sm font-medium hover:border-accent text-center"
         >
           View Queue
         </Link>

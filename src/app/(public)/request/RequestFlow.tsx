@@ -376,13 +376,13 @@ export default function RequestFlow({
 
   return (
     <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Request a Song</h1>
-        <Link href="/queue" className="text-sm text-accent hover:text-accent-hover">
+        <PromoLinks />
+        <Link href="/queue" className="text-sm text-accent hover:text-accent-hover shrink-0">
           View Queue
         </Link>
       </div>
-      <PromoLinks />
 
       {recentlyPlayedPrompt && (
         <div

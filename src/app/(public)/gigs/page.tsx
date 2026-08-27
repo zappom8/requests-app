@@ -42,9 +42,14 @@ export default async function GigsPage() {
     <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Upcoming Gigs</h1>
-        <Link href="/book" className="text-sm text-accent hover:text-accent-hover">
-          Book Lochie
-        </Link>
+        <div className="flex items-center gap-3 text-sm shrink-0">
+          <Link href="/request" className="text-accent hover:text-accent-hover">
+            Request a Song
+          </Link>
+          <Link href="/book" className="text-accent hover:text-accent-hover">
+            Book Lochie
+          </Link>
+        </div>
       </div>
 
       {calendarUrls.length === 0 && (
