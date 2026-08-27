@@ -37,7 +37,18 @@ function GigCard({ gig }: { gig: Gig }) {
         <span className="text-lg font-semibold leading-none">{dayFormatter.format(gig.start)}</span>
       </div>
       <div className="flex flex-col gap-0.5 min-w-0">
-        <p className="font-medium truncate">{gig.title}</p>
+        {locationHref ? (
+          <a
+            href={locationHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium truncate hover:text-accent hover:underline"
+          >
+            {gig.title}
+          </a>
+        ) : (
+          <p className="font-medium truncate">{gig.title}</p>
+        )}
         {gig.location && locationHref && (
           <a
             href={locationHref}
