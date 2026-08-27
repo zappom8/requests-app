@@ -136,24 +136,6 @@ export default async function SettingsPage() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="gigTitleFilters">
-            Remove from gig titles (one phrase per line)
-          </label>
-          <textarea
-            id="gigTitleFilters"
-            name="gigTitleFilters"
-            rows={2}
-            defaultValue={(settings?.gigTitleFilters ?? []).join("\n")}
-            placeholder={"Surreal"}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-accent"
-          />
-          <p className="text-xs text-foreground-muted mt-1">
-            For when a calendar you don&apos;t own (e.g. a venue&apos;s recurring listing) has wording in the title
-            you can&apos;t edit yourself — anything listed here gets stripped out before it shows on /gigs.
-          </p>
-        </div>
-
         <h2 className="text-sm font-medium pt-2">Request Behaviour</h2>
         <label className="flex items-center gap-2 text-sm">
           <input

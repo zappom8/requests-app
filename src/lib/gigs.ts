@@ -26,26 +26,6 @@ function paramValue(value: { val: string } | string | undefined): string | null 
   return typeof value === "string" ? value : value.val;
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Strips configured phrases out of a title (e.g. a venue's own branding on a
-// shared calendar Lochie can't rename at the source), then tidies up
-// whatever separator debris that leaves behind (leading/trailing " - ",
-// doubled-up spaces).
-function applyTitleFilters(title: string, filters: string[]): string {
-  let result = title;
-  for (const phrase of filters) {
-    if (!phrase.trim()) continue;
-    result = result.replace(new RegExp(escapeRegExp(phrase), "gi"), "");
-  }
-  return result
-    .replace(/\s{2,}/g, " ")
-    .replace(/^[\s-]+|[\s-]+$/g, "")
-    .trim();
-}
-
 // A shared calendar isn't necessarily gig-only (could be someone's whole
 // personal calendar) — VEVENTs are all we render, everything else (VTODO,
 // VTIMEZONE, VCALENDAR metadata) is ignored.
@@ -88,7 +68,7 @@ function extractGigs(data: Awaited<ReturnType<typeof ical.async.fromURL>>, now: 
 // Multiple calendars (e.g. a general gigs calendar plus a separate weekly
 // residency one) get merged into a single sorted list. One calendar being
 // down doesn't hide the others — allFailed only trips when none loaded.
-export async function getUpcomingGigs(icsUrls: string[], titleFilters: string[] = []): Promise<GigsResult> {
+export async function getUpcomingGigs(icsUrls: string[]): Promise<GigsResult> {
   const now = new Date();
   const horizon = new Date(now);
   horizon.setMonth(horizon.getMonth() + LOOKAHEAD_MONTHS);
@@ -99,12 +79,6 @@ export async function getUpcomingGigs(icsUrls: string[], titleFilters: string[] 
   for (const result of results) {
     if (result.status === "fulfilled") {
       gigs.push(...extractGigs(result.value, now, horizon));
-    }
-  }
-
-  if (titleFilters.length > 0) {
-    for (const gig of gigs) {
-      gig.title = applyTitleFilters(gig.title, titleFilters) || gig.title;
     }
   }
 

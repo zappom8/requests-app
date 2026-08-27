@@ -60,10 +60,6 @@ export async function updateSettings(formData: FormData) {
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
-  const gigTitleFilters = String(formData.get("gigTitleFilters") ?? "")
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
 
   const tipAmountsRaw = String(formData.get("defaultTipAmounts") ?? "");
   const defaultTipAmountsCents = tipAmountsRaw
@@ -86,7 +82,6 @@ export async function updateSettings(formData: FormData) {
       brandSecondaryColor,
       disableRecentlyPlayedPrompt,
       gigsCalendarUrls,
-      gigTitleFilters,
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
     create: {
@@ -103,7 +98,6 @@ export async function updateSettings(formData: FormData) {
       brandSecondaryColor,
       disableRecentlyPlayedPrompt,
       gigsCalendarUrls,
-      gigTitleFilters,
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
   });

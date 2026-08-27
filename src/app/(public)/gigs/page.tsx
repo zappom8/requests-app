@@ -62,16 +62,10 @@ function GigCard({ gig }: { gig: Gig }) {
 }
 
 export default async function GigsPage() {
-  const settings = await prisma.settings.findUnique({
-    where: { id: 1 },
-    select: { gigsCalendarUrls: true, gigTitleFilters: true },
-  });
+  const settings = await prisma.settings.findUnique({ where: { id: 1 }, select: { gigsCalendarUrls: true } });
   const calendarUrls = settings?.gigsCalendarUrls ?? [];
 
-  const { gigs, allFailed } =
-    calendarUrls.length > 0
-      ? await getUpcomingGigs(calendarUrls, settings?.gigTitleFilters ?? [])
-      : { gigs: [], allFailed: false };
+  const { gigs, allFailed } = calendarUrls.length > 0 ? await getUpcomingGigs(calendarUrls) : { gigs: [], allFailed: false };
 
   return (
     <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
