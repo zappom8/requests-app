@@ -15,7 +15,7 @@ export default async function QueuePage() {
     <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Queue</h1>
-        <PromoLinks />
+        <PromoLinks showBooking={false} />
         <Link href="/request" className="text-sm text-accent-hover hover:underline shrink-0">
           Request a song
         </Link>
