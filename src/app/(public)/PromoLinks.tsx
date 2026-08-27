@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function PromoLinks() {
   return (
-    <div className="flex gap-2 text-[8px] font-medium uppercase leading-tight text-center text-foreground">
+    <div className="flex gap-3 text-[9px] font-semibold uppercase leading-snug text-center text-foreground">
       <Link href="/gigs" className="hover:opacity-80">
         Next
         <br />
