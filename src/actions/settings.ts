@@ -56,6 +56,10 @@ export async function updateSettings(formData: FormData) {
   const brandPrimaryColor = optionalString(formData, "brandPrimaryColor");
   const brandSecondaryColor = optionalString(formData, "brandSecondaryColor");
   const disableRecentlyPlayedPrompt = formData.get("disableRecentlyPlayedPrompt") === "on";
+  const gigsCalendarUrls = String(formData.get("gigsCalendarUrls") ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const tipAmountsRaw = String(formData.get("defaultTipAmounts") ?? "");
   const defaultTipAmountsCents = tipAmountsRaw
@@ -77,6 +81,7 @@ export async function updateSettings(formData: FormData) {
       brandPrimaryColor,
       brandSecondaryColor,
       disableRecentlyPlayedPrompt,
+      gigsCalendarUrls,
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
     create: {
@@ -92,6 +97,7 @@ export async function updateSettings(formData: FormData) {
       brandPrimaryColor,
       brandSecondaryColor,
       disableRecentlyPlayedPrompt,
+      gigsCalendarUrls,
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
   });
@@ -99,6 +105,7 @@ export async function updateSettings(formData: FormData) {
   revalidatePath("/dashboard/settings");
   revalidatePath("/profile");
   revalidatePath("/request");
+  revalidatePath("/gigs");
 }
 
 export async function uploadBrandingImage(formData: FormData) {

@@ -64,12 +64,26 @@ export default async function ProfilePage() {
         <p className="text-foreground-muted">Profile coming soon.</p>
       )}
 
-      <Link
-        href="/queue"
-        className="rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-      >
-        View Queue
-      </Link>
+      <div className="flex flex-col gap-3 w-full max-w-xs">
+        <Link
+          href="/queue"
+          className="rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground hover:bg-accent-hover text-center"
+        >
+          View Queue
+        </Link>
+        <Link
+          href="/gigs"
+          className="rounded-lg border border-border px-4 py-3 text-sm font-medium hover:border-accent text-center"
+        >
+          Upcoming Gigs
+        </Link>
+        <Link
+          href="/book"
+          className="rounded-lg border border-border px-4 py-3 text-sm font-medium hover:border-accent text-center"
+        >
+          Book Lochie
+        </Link>
+      </div>
     </div>
   );
 }

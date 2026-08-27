@@ -112,6 +112,30 @@ export default async function SettingsPage() {
           </div>
         </div>
 
+        <h2 className="text-sm font-medium pt-2">Gigs Calendar</h2>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium" htmlFor="gigsCalendarUrls">
+            Public calendar links (one per line)
+          </label>
+          <textarea
+            id="gigsCalendarUrls"
+            name="gigsCalendarUrls"
+            rows={3}
+            defaultValue={(settings?.gigsCalendarUrls ?? []).join("\n")}
+            placeholder={"https://p123-caldav.icloud.com/published/2/...\nhttps://p123-caldav.icloud.com/published/2/..."}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-accent"
+          />
+          <p className="text-xs text-foreground-muted mt-1">
+            The <a href="/gigs" className="underline hover:text-foreground">/gigs</a> page shows upcoming events
+            (next 2 months) merged from every calendar link here — e.g. a general gigs calendar plus a separate
+            weekly residency calendar. Add gigs from your phone&apos;s Calendar app and they show up automatically,
+            no need to come back here. In the Calendar app: create (or pick) a calendar → tap the info button next
+            to it → turn on &quot;Public Calendar&quot; → &quot;Copy Link&quot;. Paste each link on its own line, but
+            change <code className="mx-1 rounded bg-surface-elevated px-1">webcal://</code> at the start of each to
+            <code className="mx-1 rounded bg-surface-elevated px-1">https://</code>.
+          </p>
+        </div>
+
         <h2 className="text-sm font-medium pt-2">Request Behaviour</h2>
         <label className="flex items-center gap-2 text-sm">
           <input

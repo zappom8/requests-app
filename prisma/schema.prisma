@@ -22,6 +22,12 @@ enum PaymentStatus {
   PARTIALLY_REFUNDED
 }
 
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
 model SongDatabase {
   id         String      @id @default(cuid())
   name       String
@@ -128,5 +134,31 @@ model Settings {
   brandPrimaryColor      String?
   brandSecondaryColor    String?
   disableRecentlyPlayedPrompt Boolean @default(false)
+  // Public "share this calendar" links (webcal:// → https://) from iCloud
+  // (or any RFC 5545) calendars — e.g. a general gigs calendar plus a
+  // separate weekly-residency calendar. /gigs merges every URL here into
+  // one sorted list, no dashboard CRUD needed since Lochie already manages
+  // his gig dates in Calendar.
+  gigsCalendarUrls        String[] @default([])
   updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// Public /book form submissions — reviewed and actioned manually from the
+// dashboard, same "no queue automation, artist handles it by hand" pattern
+// as request moderation elsewhere in this app.
+model BookingInquiry {
+  id        String        @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  // Free text, not DateTime — this is informational only (never used in a
+  // calculation/sort where a timezone bug could bite, per the DateTime
+  // pitfall already hit and fixed elsewhere in this schema).
+  eventDate String?
+  location  String?
+  message   String
+  status    InquiryStatus @default(NEW)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([status, createdAt])
 }
