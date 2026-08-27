@@ -7,6 +7,9 @@ export type Gig = {
   start: Date;
   end: Date | null;
   location: string | null;
+  // The event's "URL" field in Calendar — lets Lochie point a gig at the
+  // venue's actual website/Google listing instead of a generic Maps search.
+  url: string | null;
   isFullDay: boolean;
 };
 
@@ -44,6 +47,7 @@ function extractGigs(data: Awaited<ReturnType<typeof ical.async.fromURL>>, now: 
           start: instance.start,
           end: instance.end ?? null,
           location: paramValue(instance.event.location),
+          url: instance.event.url ?? null,
           isFullDay: instance.isFullDay,
         });
       }
@@ -58,6 +62,7 @@ function extractGigs(data: Awaited<ReturnType<typeof ical.async.fromURL>>, now: 
       start,
       end: (event.end as Date | undefined) ?? null,
       location: paramValue(event.location),
+      url: event.url ?? null,
       isFullDay: event.datetype === "date",
     });
   }

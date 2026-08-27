@@ -24,9 +24,11 @@ const timeFormatter = new Intl.DateTimeFormat("en-AU", {
 });
 
 function GigCard({ gig }: { gig: Gig }) {
-  const mapsHref = gig.location
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(gig.location)}`
-    : null;
+  // Prefer the event's own "URL" field (set in Calendar) so the venue's
+  // actual website/Google listing can be linked instead of a generic Maps
+  // search — falls back to that search when no URL is set on the event.
+  const locationHref =
+    gig.url ?? (gig.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(gig.location)}` : null);
 
   return (
     <li className="rounded-lg border border-border bg-surface p-4 flex gap-4">
@@ -36,9 +38,9 @@ function GigCard({ gig }: { gig: Gig }) {
       </div>
       <div className="flex flex-col gap-0.5 min-w-0">
         <p className="font-medium truncate">{gig.title}</p>
-        {mapsHref && (
+        {gig.location && locationHref && (
           <a
-            href={mapsHref}
+            href={locationHref}
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-foreground-muted truncate hover:text-accent hover:underline"
