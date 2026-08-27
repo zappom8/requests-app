@@ -24,6 +24,10 @@ const timeFormatter = new Intl.DateTimeFormat("en-AU", {
 });
 
 function GigCard({ gig }: { gig: Gig }) {
+  const mapsHref = gig.location
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(gig.location)}`
+    : null;
+
   return (
     <li className="rounded-lg border border-border bg-surface p-4 flex gap-4">
       <div className="flex flex-col items-center justify-center rounded-lg bg-surface-elevated px-3 py-2 text-center shrink-0 w-16">
@@ -32,10 +36,25 @@ function GigCard({ gig }: { gig: Gig }) {
       </div>
       <div className="flex flex-col gap-0.5 min-w-0">
         <p className="font-medium truncate">{gig.title}</p>
-        {gig.location && <p className="text-sm text-foreground-muted truncate">{gig.location}</p>}
+        {mapsHref && (
+          <a
+            href={mapsHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-foreground-muted truncate hover:text-accent hover:underline"
+          >
+            {gig.location}
+          </a>
+        )}
         <p className="text-xs text-foreground-muted">
           {dateFormatter.format(gig.start)}
-          {!gig.isFullDay && <> · {timeFormatter.format(gig.start)}</>}
+          {!gig.isFullDay && (
+            <>
+              {" "}
+              · {timeFormatter.format(gig.start)}
+              {gig.end && <> – {timeFormatter.format(gig.end)}</>}
+            </>
+          )}
         </p>
       </div>
     </li>
@@ -43,10 +62,16 @@ function GigCard({ gig }: { gig: Gig }) {
 }
 
 export default async function GigsPage() {
-  const settings = await prisma.settings.findUnique({ where: { id: 1 }, select: { gigsCalendarUrls: true } });
+  const settings = await prisma.settings.findUnique({
+    where: { id: 1 },
+    select: { gigsCalendarUrls: true, gigTitleFilters: true },
+  });
   const calendarUrls = settings?.gigsCalendarUrls ?? [];
 
-  const { gigs, allFailed } = calendarUrls.length > 0 ? await getUpcomingGigs(calendarUrls) : { gigs: [], allFailed: false };
+  const { gigs, allFailed } =
+    calendarUrls.length > 0
+      ? await getUpcomingGigs(calendarUrls, settings?.gigTitleFilters ?? [])
+      : { gigs: [], allFailed: false };
 
   return (
     <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-4">

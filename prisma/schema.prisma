@@ -140,6 +140,10 @@ model Settings {
   // one sorted list, no dashboard CRUD needed since Lochie already manages
   // his gig dates in Calendar.
   gigsCalendarUrls        String[] @default([])
+  // Phrases stripped out of gig titles before display on /gigs — needed
+  // because a shared calendar Lochie doesn't own (e.g. a venue's recurring
+  // residency listing) can't be renamed at the source.
+  gigTitleFilters         String[] @default([])
   updatedAt              DateTime @updatedAt @db.Timestamptz(3)
 }
 
