@@ -81,6 +81,44 @@ function extractGigs(data: Awaited<ReturnType<typeof ical.async.fromURL>>, now: 
   return gigs;
 }
 
+function icsDate(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+}
+
+// RFC 5545 §3.3.11 text escaping — backslash, semicolon, comma, and newline
+// are structural characters in an ICS value and must be escaped literally.
+function escapeIcsText(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+// Falls back to a 2-hour slot when a calendar event has no end time — long
+// enough to cover a typical DJ set, short enough not to look like an all-day
+// block on the viewer's own calendar.
+const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+
+// Builds a standalone single-event .ics so a viewer can add a gig straight
+// to their own calendar — not the feed /gigs itself reads from.
+export function buildGigIcs(gig: { title: string; start: Date; end: Date | null; location: string | null; url: string | null }): string {
+  const end = gig.end ?? new Date(gig.start.getTime() + DEFAULT_DURATION_MS);
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Lochie Gig//Gigs//EN",
+    "BEGIN:VEVENT",
+    `UID:${gig.start.getTime()}-${encodeURIComponent(gig.title)}@lochiegig`,
+    `DTSTAMP:${icsDate(new Date())}`,
+    `DTSTART:${icsDate(gig.start)}`,
+    `DTEND:${icsDate(end)}`,
+    `SUMMARY:${escapeIcsText(gig.title)}`,
+    gig.location ? `LOCATION:${escapeIcsText(gig.location)}` : null,
+    gig.url ? `URL:${gig.url}` : null,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].filter((line): line is string => line !== null);
+
+  return lines.join("\r\n");
+}
+
 // Multiple calendars (e.g. a general gigs calendar plus a separate weekly
 // residency one) get merged into a single sorted list. One calendar being
 // down doesn't hide the others — allFailed only trips when none loaded.

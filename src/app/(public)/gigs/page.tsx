@@ -30,12 +30,22 @@ function GigCard({ gig }: { gig: Gig }) {
   const locationHref =
     gig.url ?? (gig.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(gig.location)}` : null);
 
+  const icsParams = new URLSearchParams({ title: gig.title, start: gig.start.toISOString() });
+  if (gig.end) icsParams.set("end", gig.end.toISOString());
+  if (gig.location) icsParams.set("location", gig.location);
+  if (gig.url) icsParams.set("url", gig.url);
+  const addToCalendarHref = `/api/gigs/ics?${icsParams.toString()}`;
+
   return (
     <li className="rounded-lg border border-border bg-surface p-4 flex gap-4">
-      <div className="flex flex-col items-center justify-center rounded-lg bg-surface-elevated px-3 py-2 text-center shrink-0 w-16">
+      <a
+        href={addToCalendarHref}
+        title="Add to Calendar"
+        className="flex flex-col items-center justify-center rounded-lg bg-surface-elevated px-3 py-2 text-center shrink-0 w-16 hover:bg-accent/20"
+      >
         <span className="text-xs uppercase text-foreground-muted">{monthFormatter.format(gig.start)}</span>
         <span className="text-lg font-semibold leading-none">{dayFormatter.format(gig.start)}</span>
-      </div>
+      </a>
       <div className="flex flex-col gap-0.5 min-w-0">
         {locationHref ? (
           <a
