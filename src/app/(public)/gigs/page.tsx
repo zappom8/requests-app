@@ -4,14 +4,24 @@ import { getUpcomingGigs, type Gig } from "@/lib/gigs";
 
 export const dynamic = "force-dynamic";
 
+// Gigs are tied to a real venue in a real place, not the viewer's own
+// timezone (unlike e.g. dashboard timestamps) — always render in the gig's
+// timezone, not whatever timezone the server happens to run in (Vercel's
+// default is UTC, which without this showed a 5pm Brisbane gig as 7am).
+const GIG_TIMEZONE = "Australia/Brisbane";
 const dateFormatter = new Intl.DateTimeFormat("en-AU", {
   weekday: "short",
   day: "numeric",
   month: "short",
+  timeZone: GIG_TIMEZONE,
 });
-const monthFormatter = new Intl.DateTimeFormat("en-AU", { month: "short" });
-const dayFormatter = new Intl.DateTimeFormat("en-AU", { day: "numeric" });
-const timeFormatter = new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit" });
+const monthFormatter = new Intl.DateTimeFormat("en-AU", { month: "short", timeZone: GIG_TIMEZONE });
+const dayFormatter = new Intl.DateTimeFormat("en-AU", { day: "numeric", timeZone: GIG_TIMEZONE });
+const timeFormatter = new Intl.DateTimeFormat("en-AU", {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: GIG_TIMEZONE,
+});
 
 function GigCard({ gig }: { gig: Gig }) {
   return (
