@@ -2,12 +2,16 @@ import Link from "next/link";
 
 export default function PromoLinks() {
   return (
-    <div className="flex flex-col items-center gap-0.5 text-[8px] uppercase tracking-wide text-tip whitespace-nowrap">
+    <div className="flex gap-2 text-[8px] font-medium uppercase leading-tight text-center text-tip">
       <Link href="/gigs" className="hover:opacity-80">
-        Next Gigs
+        Next
+        <br />
+        Gigs
       </Link>
       <Link href="/book" className="hover:opacity-80">
-        Book Lochie
+        Book
+        <br />
+        Lochie
       </Link>
       <Link href="/profile" className="hover:opacity-80">
         Socials
