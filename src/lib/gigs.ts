@@ -29,6 +29,17 @@ function paramValue(value: { val: string } | string | undefined): string | null 
   return typeof value === "string" ? value : value.val;
 }
 
+// event.url comes through the same {val, params} wrapper as summary/location
+// despite its .d.ts type claiming a plain string — and node-ical still
+// returns that wrapper (with an empty .val) for events with no URL set at
+// all, rather than undefined. Unwrap it and treat a blank result as absent,
+// or React ends up rendering the whole object into an href.
+function eventUrl(value: unknown): string | null {
+  const raw = paramValue(value as { val: string } | string | undefined);
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : null;
+}
+
 // A shared calendar isn't necessarily gig-only (could be someone's whole
 // personal calendar) — VEVENTs are all we render, everything else (VTODO,
 // VTIMEZONE, VCALENDAR metadata) is ignored.
@@ -47,7 +58,7 @@ function extractGigs(data: Awaited<ReturnType<typeof ical.async.fromURL>>, now: 
           start: instance.start,
           end: instance.end ?? null,
           location: paramValue(instance.event.location),
-          url: instance.event.url ?? null,
+          url: eventUrl(instance.event.url),
           isFullDay: instance.isFullDay,
         });
       }
@@ -62,7 +73,7 @@ function extractGigs(data: Awaited<ReturnType<typeof ical.async.fromURL>>, now: 
       start,
       end: (event.end as Date | undefined) ?? null,
       location: paramValue(event.location),
-      url: event.url ?? null,
+      url: eventUrl(event.url),
       isFullDay: event.datetype === "date",
     });
   }
