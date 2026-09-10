@@ -111,9 +111,9 @@ export default function LiveQueueList({
         <li key={item.id} className="rounded-xl border border-border bg-surface p-4 flex gap-3">
           <div className="flex-1 min-w-0 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-lg font-semibold">{item.songName}</p>
-                <p className="text-foreground-muted">{item.artistName}</p>
+              <div className="min-w-0">
+                <p className="text-lg font-semibold truncate">{item.songName}</p>
+                <p className="text-foreground-muted truncate">{item.artistName}</p>
               </div>
               {/* suppressHydrationWarning: locale/timezone-formatted time will
                   legitimately differ between server render and the browser
@@ -154,7 +154,7 @@ export default function LiveQueueList({
           <button
             onClick={() => handlePlayed(item)}
             disabled={pendingActionId === item.id}
-            className="w-24 shrink-0 rounded-xl bg-success text-background text-lg font-bold disabled:opacity-50 flex items-center justify-center"
+            className="w-24 sm:w-16 shrink-0 rounded-xl bg-success text-background text-lg sm:text-xs font-bold disabled:opacity-50 flex items-center justify-center"
           >
             PLAYED
           </button>
