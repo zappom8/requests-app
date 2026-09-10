@@ -106,9 +106,9 @@ export default function LiveQueueList({
   }
 
   return (
-    <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+    <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {queue.map((item) => (
-        <li key={item.id} className="rounded-xl border border-border bg-surface p-4 flex gap-3">
+        <li key={item.id} className="rounded-xl border border-border bg-surface p-4 flex flex-row sm:flex-col gap-3">
           <div className="flex-1 min-w-0 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -154,7 +154,7 @@ export default function LiveQueueList({
           <button
             onClick={() => handlePlayed(item)}
             disabled={pendingActionId === item.id}
-            className="w-24 sm:w-16 shrink-0 rounded-xl bg-success text-background text-lg sm:text-xs font-bold disabled:opacity-50 flex items-center justify-center"
+            className="w-24 sm:w-full sm:h-9 shrink-0 rounded-xl bg-success text-background text-lg sm:text-sm font-bold disabled:opacity-50 flex items-center justify-center"
           >
             PLAYED
           </button>
