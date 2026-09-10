@@ -133,7 +133,14 @@ export default function RequestFlow({
     return [];
   }, [searchQuery, searchResults, browseMode, selectedArtist, selectedDecade, initialSongs]);
 
+  // Remembers where the audience member was scrolled to on the browse list
+  // so "Request Another" (or "Back") returns them to the same spot — handy
+  // mid-alphabet or mid-search-results, instead of dumping them back at the
+  // top of the whole catalog every time.
+  const browseScrollRef = useRef(0);
+
   function goToDetails(song: SongResult) {
+    browseScrollRef.current = window.scrollY;
     setSelectedSong(song);
     setStep("details");
     setError(null);
@@ -161,10 +168,18 @@ export default function RequestFlow({
     setOtherAmountDollars("");
     setCreatedRequestId(null);
     setError(null);
-    setSearchQuery("");
-    setSearchResults(null);
+    // Search query/results and browse mode deliberately kept as-is — see
+    // browseScrollRef above, same reasoning.
     searchLoggedRef.current = false;
   }
+
+  // Runs after the browse list is back in the DOM (post-submit or "Back")
+  // so its full height exists to scroll into — restores the exact spot
+  // instead of leaving the visitor at the top of the whole catalog.
+  useEffect(() => {
+    if (step !== "browse") return;
+    window.scrollTo(0, browseScrollRef.current);
+  }, [step]);
 
   async function handleContinue() {
     if (!selectedSong) return;
