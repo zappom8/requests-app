@@ -10,7 +10,20 @@ type GroupedRequest = {
   tipAmountCents: number;
   paymentStatus: string;
   requestedAt: Date;
+  isFiller: boolean;
 };
+
+// Lochie sometimes adds requests under this name himself to keep the queue
+// moving during dead air — those should never outrank a real audience
+// request, tipped or not, so they're sorted to the back regardless of the
+// usual tip/popularity/time ordering. A group only counts as filler when
+// every requester in it used this name; a real listener requesting the same
+// song puts it back in normal contention.
+const FILLER_REQUESTER_NAME = "zappo";
+
+function isFillerName(name: string): boolean {
+  return name.trim().toLowerCase() === FILLER_REQUESTER_NAME;
+}
 
 // Two or more still-queued requests for the same song (by songId, falling
 // back to name+artist for the rare case a catalog song was deleted mid-
@@ -66,11 +79,13 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
       tipAmountCents: primary.tipAmountCents,
       paymentStatus: primary.paymentStatus,
       requestedAt: earliestRequestedAt,
+      isFiller: group.every((r) => isFillerName(r.requesterName)),
     };
   });
 
   items.sort(
     (a, b) =>
+      Number(a.isFiller) - Number(b.isFiller) ||
       b.tipAmountCents - a.tipAmountCents ||
       b.otherRequesterCount - a.otherRequesterCount ||
       a.requestedAt.getTime() - b.requestedAt.getTime()
