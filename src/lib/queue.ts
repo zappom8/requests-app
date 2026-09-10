@@ -11,7 +11,12 @@ type GroupedRequest = {
   paymentStatus: string;
   requestedAt: Date;
   isFiller: boolean;
+  isPairedAddition: boolean;
+  triggeredByRequestId: string | null;
+  linkedSongs: LinkedSong[];
 };
+
+export type LinkedSong = { songName: string; artistName: string };
 
 // Lochie sometimes adds requests under this name himself to keep the queue
 // moving during dead air — those should never outrank a real audience
@@ -47,6 +52,8 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
       tipAmountCents: true,
       paymentStatus: true,
       requestedAt: true,
+      isPairedAddition: true,
+      triggeredByRequestId: true,
     },
   });
 
@@ -80,10 +87,39 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
       paymentStatus: primary.paymentStatus,
       requestedAt: earliestRequestedAt,
       isFiller: group.every((r) => isFillerName(r.requesterName)),
+      isPairedAddition: group.every((r) => r.isPairedAddition),
+      // Representative only — real (non-paired) groups never read this, and
+      // a paired group is a single SongPairing target, so its members (if
+      // ever more than one, e.g. a rare create race) all point at the same trigger.
+      triggeredByRequestId: group[0].triggeredByRequestId,
+      linkedSongs: [],
     };
   });
 
-  items.sort(
+  // A song that's purely the result of a pairing (never a real request in
+  // its own right) doesn't get its own Live Queue card — it's folded into
+  // the card of whichever request triggered it, as a linked-song tab, and
+  // its request id(s) ride along so marking the trigger PLAYED/DELETEd
+  // resolves both together (see markPlayed/deleteRequest in
+  // src/actions/queue.ts, which already take an id array for exactly this
+  // kind of "resolve as one unit" grouping).
+  const primaryItems = items.filter((i) => !i.isPairedAddition);
+  const pairedItems = items.filter((i) => i.isPairedAddition);
+
+  for (const paired of pairedItems) {
+    const triggerPrimary = paired.triggeredByRequestId
+      ? primaryItems.find((p) => p.requestIds.includes(paired.triggeredByRequestId!))
+      : undefined;
+    // Orphaned (trigger no longer queued, e.g. resolved through some other
+    // path) — drop it rather than surface a linked song with nothing to
+    // attach to.
+    if (!triggerPrimary) continue;
+
+    triggerPrimary.linkedSongs.push({ songName: paired.songName, artistName: paired.artistName });
+    triggerPrimary.requestIds = [...triggerPrimary.requestIds, ...paired.requestIds];
+  }
+
+  primaryItems.sort(
     (a, b) =>
       Number(a.isFiller) - Number(b.isFiller) ||
       b.tipAmountCents - a.tipAmountCents ||
@@ -91,7 +127,7 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
       a.requestedAt.getTime() - b.requestedAt.getTime()
   );
 
-  return items;
+  return primaryItems;
 }
 
 export type PublicQueueItem = {
@@ -104,7 +140,8 @@ export type PublicQueueItem = {
 // paymentStatus, or any payment-provider field. Deliberately omits how many
 // people requested a song too, even though it's grouped/boosted the same
 // way the admin queue is — showing that number would invite people to spam
-// requests for a song just to watch (and inflate) the count.
+// requests for a song just to watch (and inflate) the count. Linked/paired
+// songs are internal queue-management detail, also omitted here.
 export async function getPublicQueue(songDatabaseId: string): Promise<PublicQueueItem[]> {
   const groups = await getGroupedQueue(songDatabaseId);
   return groups.map((g) => ({
@@ -125,6 +162,7 @@ export type AdminQueueItem = {
   tipAmountCents: number;
   paymentStatus: string;
   requestedAt: Date;
+  linkedSongs: LinkedSong[];
 };
 
 // Full fields — admin/dashboard use only (protected by src/proxy.ts).
@@ -141,5 +179,6 @@ export async function getAdminQueue(songDatabaseId: string): Promise<AdminQueueI
     tipAmountCents: g.tipAmountCents,
     paymentStatus: g.paymentStatus,
     requestedAt: g.requestedAt,
+    linkedSongs: g.linkedSongs,
   }));
 }

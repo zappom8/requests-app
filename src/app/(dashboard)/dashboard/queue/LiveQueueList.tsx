@@ -115,56 +115,68 @@ export default function LiveQueueList({
       ) : (
         <ul className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
           {queue.map((item) => (
-            <li key={item.id} className="rounded-xl border border-border bg-surface p-4 flex flex-row sm:flex-col gap-3">
-              <div className="flex-1 min-w-0 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-lg font-semibold truncate">{item.songName}</p>
-                    <p className="text-foreground-muted truncate">{item.artistName}</p>
-                  </div>
-                  {/* suppressHydrationWarning: locale/timezone-formatted time will
-                      legitimately differ between server render and the browser
-                      (e.g. server in one timezone, phone in another) — expected,
-                      not a bug. */}
-                  <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
-                    {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                  </p>
+            <li key={item.id} className="rounded-xl border border-border bg-surface overflow-hidden">
+              {item.linkedSongs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 bg-accent/15 px-4 py-1.5 text-xs font-medium text-accent-hover">
+                  <span>🔗 Also cues:</span>
+                  {item.linkedSongs.map((s, i) => (
+                    <span key={i} className="rounded-full bg-accent/20 px-2 py-0.5">
+                      {s.songName} — {s.artistName}
+                    </span>
+                  ))}
                 </div>
-
-                <div className="text-sm">
-                  <p>
-                    Requested by <span className="font-medium">{item.requesterName}</span>
-                    {item.otherRequesterCount > 0 &&
-                      ` and ${item.otherRequesterCount} other${item.otherRequesterCount === 1 ? "" : "s"}`}
-                  </p>
-                  {item.wantsShoutOut && <p className="text-tip font-medium">⭐ Wants a shout-out</p>}
-                  {item.tipAmountCents > 0 && (
-                    <p className="text-tip font-semibold mt-1">
-                      Tipped ${(item.tipAmountCents / 100).toFixed(2)}
-                      {item.otherRequesterCount > 0 && ` by ${item.requesterName}`}
+              )}
+              <div className="p-4 flex flex-row sm:flex-col gap-3">
+                <div className="flex-1 min-w-0 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-lg font-semibold truncate">{item.songName}</p>
+                      <p className="text-foreground-muted truncate">{item.artistName}</p>
+                    </div>
+                    {/* suppressHydrationWarning: locale/timezone-formatted time will
+                        legitimately differ between server render and the browser
+                        (e.g. server in one timezone, phone in another) — expected,
+                        not a bug. */}
+                    <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
+                      {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                     </p>
-                  )}
-                  {item.paymentStatus === "PENDING" && (
-                    <p className="text-xs text-foreground-muted mt-1">Tip payment in progress…</p>
-                  )}
+                  </div>
+
+                  <div className="text-sm">
+                    <p>
+                      Requested by <span className="font-medium">{item.requesterName}</span>
+                      {item.otherRequesterCount > 0 &&
+                        ` and ${item.otherRequesterCount} other${item.otherRequesterCount === 1 ? "" : "s"}`}
+                    </p>
+                    {item.wantsShoutOut && <p className="text-tip font-medium">⭐ Wants a shout-out</p>}
+                    {item.tipAmountCents > 0 && (
+                      <p className="text-tip font-semibold mt-1">
+                        Tipped ${(item.tipAmountCents / 100).toFixed(2)}
+                        {item.otherRequesterCount > 0 && ` by ${item.requesterName}`}
+                      </p>
+                    )}
+                    {item.paymentStatus === "PENDING" && (
+                      <p className="text-xs text-foreground-muted mt-1">Tip payment in progress…</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => handleDelete(item)}
+                    disabled={pendingActionId === item.id}
+                    className="self-start rounded-lg border border-danger/50 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+                  >
+                    DELETE
+                  </button>
                 </div>
 
                 <button
-                  onClick={() => handleDelete(item)}
+                  onClick={() => handlePlayed(item)}
                   disabled={pendingActionId === item.id}
-                  className="self-start rounded-lg border border-danger/50 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+                  className="w-24 sm:w-full sm:h-9 shrink-0 rounded-xl bg-success text-background text-lg sm:text-sm font-bold disabled:opacity-50 flex items-center justify-center"
                 >
-                  DELETE
+                  PLAYED
                 </button>
               </div>
-
-              <button
-                onClick={() => handlePlayed(item)}
-                disabled={pendingActionId === item.id}
-                className="w-24 sm:w-full sm:h-9 shrink-0 rounded-xl bg-success text-background text-lg sm:text-sm font-bold disabled:opacity-50 flex items-center justify-center"
-              >
-                PLAYED
-              </button>
             </li>
           ))}
         </ul>

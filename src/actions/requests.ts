@@ -20,6 +20,11 @@ export type CreateRequestInput = {
 
 const MIN_TIP_CENTS = 50; // Square's practical minimum charge
 
+// requesterName shown on the Live Queue for auto-added paired songs — fixed
+// rather than copied from the real requester, so it's obviously not a real
+// request and stays filterable in History/Payments.
+const PAIRED_ADDITION_REQUESTER_NAME = "Auto-paired";
+
 async function insertUntippedRequest(input: CreateRequestInput, paymentStatus: PaymentStatus) {
   const requesterName = input.requesterName.trim();
   if (!requesterName) throw new Error("Your name is required");
@@ -38,9 +43,59 @@ async function insertUntippedRequest(input: CreateRequestInput, paymentStatus: P
     },
   });
 
+  await addPairedRequests(request.id, input.songName, input.artistName, input.songDatabaseId);
+
   revalidatePath("/queue");
   await broadcastQueueChanged(input.songDatabaseId);
   return request;
+}
+
+// Auto-queues every song this one is known to transition into (see
+// SongPairing / the dashboard's Song Pairings manager, /dashboard/pairings).
+// Pairings are global (by song name+artist), but the auto-added Request
+// still needs a real Song row from *this* database's own catalog to point
+// its songId at — a pairing whose target isn't in the triggering database
+// is silently skipped, since there's nothing to queue. Only one level deep
+// — a paired addition never triggers further pairings — and skipped per
+// target song that's already QUEUED, so requesting the same song twice (or
+// a real request landing on an already-auto-added song) doesn't pile up
+// duplicate paired rows for the same transition.
+async function addPairedRequests(
+  triggeredByRequestId: string,
+  fromSongName: string,
+  fromArtistName: string,
+  songDatabaseId: string
+) {
+  const pairings = await prisma.songPairing.findMany({
+    where: { fromSongName, fromArtistName },
+  });
+  if (pairings.length === 0) return;
+
+  for (const pairing of pairings) {
+    const toSong = await prisma.song.findFirst({
+      where: { songDatabaseId, name: pairing.toSongName, artist: pairing.toArtistName },
+    });
+    if (!toSong) continue;
+
+    const alreadyQueued = await prisma.request.findFirst({
+      where: { songDatabaseId, songId: toSong.id, status: "QUEUED" },
+      select: { id: true },
+    });
+    if (alreadyQueued) continue;
+
+    await prisma.request.create({
+      data: {
+        songDatabaseId,
+        songId: toSong.id,
+        songName: toSong.name,
+        artistName: toSong.artist,
+        decade: toSong.decade,
+        requesterName: PAIRED_ADDITION_REQUESTER_NAME,
+        isPairedAddition: true,
+        triggeredByRequestId,
+      },
+    });
+  }
 }
 
 // Next.js redacts thrown Server Action errors to a generic digest in

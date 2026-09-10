@@ -4,72 +4,99 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { parseSongsCsv } from "@/lib/csv";
 
-export async function createSongDatabase(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Database name is required");
+// Next.js redacts thrown Server Action errors to a generic digest in
+// production builds (dev shows the real message) — e.g. deleteSongDatabase
+// used to throw on a foreign-key violation and every caller saw only
+// "Minified React error #441" with the actual reason invisible. Every
+// action below returns this instead of throwing on an expected failure.
+type ActionResult<T = object> = (T & { success: true }) | { success: false; error: string };
 
-  const file = formData.get("file") as File | null;
-  if (file && file.size > 0) {
-    const songs = parseSongsCsv(await file.text());
-    if (songs.length === 0) throw new Error("No valid rows found in that CSV.");
+export async function createSongDatabase(formData: FormData): Promise<ActionResult> {
+  try {
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) throw new Error("Database name is required");
+
+    const file = formData.get("file") as File | null;
+    if (file && file.size > 0) {
+      const songs = parseSongsCsv(await file.text());
+      if (songs.length === 0) throw new Error("No valid rows found in that CSV.");
+      await prisma.songDatabase.create({
+        data: {
+          name,
+          songs: { create: songs.map((s) => ({ name: s.name, artist: s.artist, decade: s.decade })) },
+        },
+      });
+    } else {
+      await prisma.songDatabase.create({ data: { name } });
+    }
+
+    revalidatePath("/dashboard/databases");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Something went wrong. Please try again." };
+  }
+}
+
+export async function setActiveDatabase(formData: FormData): Promise<ActionResult> {
+  try {
+    const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
+    if (!songDatabaseId) throw new Error("songDatabaseId is required");
+
+    await prisma.settings.upsert({
+      where: { id: 1 },
+      update: { activeSongDatabaseId: songDatabaseId },
+      create: { id: 1, activeSongDatabaseId: songDatabaseId },
+    });
+    revalidatePath("/dashboard/databases");
+    revalidatePath("/request");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Something went wrong. Please try again." };
+  }
+}
+
+export async function renameSongDatabase(formData: FormData): Promise<ActionResult> {
+  try {
+    const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
+    const name = String(formData.get("name") ?? "").trim();
+    if (!songDatabaseId || !name) throw new Error("songDatabaseId and name are required");
+
+    await prisma.songDatabase.update({ where: { id: songDatabaseId }, data: { name } });
+    revalidatePath("/dashboard/databases");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Something went wrong. Please try again." };
+  }
+}
+
+export async function duplicateSongDatabase(formData: FormData): Promise<ActionResult> {
+  try {
+    const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
+    if (!songDatabaseId) throw new Error("songDatabaseId is required");
+
+    const source = await prisma.songDatabase.findUnique({
+      where: { id: songDatabaseId },
+      include: { songs: true },
+    });
+    if (!source) throw new Error("Database not found");
+
     await prisma.songDatabase.create({
       data: {
-        name,
-        songs: { create: songs.map((s) => ({ name: s.name, artist: s.artist, decade: s.decade })) },
+        name: `${source.name} (copy)`,
+        songs: {
+          create: source.songs.map((song) => ({
+            name: song.name,
+            artist: song.artist,
+            decade: song.decade,
+          })),
+        },
       },
     });
-  } else {
-    await prisma.songDatabase.create({ data: { name } });
+    revalidatePath("/dashboard/databases");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Something went wrong. Please try again." };
   }
-
-  revalidatePath("/dashboard/databases");
-}
-
-export async function setActiveDatabase(formData: FormData) {
-  const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
-  if (!songDatabaseId) throw new Error("songDatabaseId is required");
-
-  await prisma.settings.upsert({
-    where: { id: 1 },
-    update: { activeSongDatabaseId: songDatabaseId },
-    create: { id: 1, activeSongDatabaseId: songDatabaseId },
-  });
-  revalidatePath("/dashboard/databases");
-  revalidatePath("/request");
-}
-
-export async function renameSongDatabase(formData: FormData) {
-  const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  if (!songDatabaseId || !name) throw new Error("songDatabaseId and name are required");
-
-  await prisma.songDatabase.update({ where: { id: songDatabaseId }, data: { name } });
-  revalidatePath("/dashboard/databases");
-}
-
-export async function duplicateSongDatabase(formData: FormData) {
-  const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
-  if (!songDatabaseId) throw new Error("songDatabaseId is required");
-
-  const source = await prisma.songDatabase.findUnique({
-    where: { id: songDatabaseId },
-    include: { songs: true },
-  });
-  if (!source) throw new Error("Database not found");
-
-  await prisma.songDatabase.create({
-    data: {
-      name: `${source.name} (copy)`,
-      songs: {
-        create: source.songs.map((song) => ({
-          name: song.name,
-          artist: song.artist,
-          decade: song.decade,
-        })),
-      },
-    },
-  });
-  revalidatePath("/dashboard/databases");
 }
 
 // Deleting is only offered in the UI when the database is inactive and has
@@ -77,22 +104,27 @@ export async function duplicateSongDatabase(formData: FormData) {
 // RESTRICT specifically to protect permanent history — see plan). This
 // action re-checks server-side regardless, since Server Actions are
 // reachable directly and the UI check alone isn't a security boundary.
-export async function deleteSongDatabase(formData: FormData) {
-  const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
-  if (!songDatabaseId) throw new Error("songDatabaseId is required");
+export async function deleteSongDatabase(formData: FormData): Promise<ActionResult> {
+  try {
+    const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
+    if (!songDatabaseId) throw new Error("songDatabaseId is required");
 
-  const [settings, requestCount] = await Promise.all([
-    prisma.settings.findUnique({ where: { id: 1 } }),
-    prisma.request.count({ where: { songDatabaseId } }),
-  ]);
+    const [settings, requestCount] = await Promise.all([
+      prisma.settings.findUnique({ where: { id: 1 } }),
+      prisma.request.count({ where: { songDatabaseId } }),
+    ]);
 
-  if (settings?.activeSongDatabaseId === songDatabaseId) {
-    throw new Error("Can't delete the active database — set a different one active first.");
+    if (settings?.activeSongDatabaseId === songDatabaseId) {
+      throw new Error("Can't delete the active database — set a different one active first.");
+    }
+    if (requestCount > 0) {
+      throw new Error("Can't delete — this database has request history.");
+    }
+
+    await prisma.songDatabase.delete({ where: { id: songDatabaseId } });
+    revalidatePath("/dashboard/databases");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Something went wrong. Please try again." };
   }
-  if (requestCount > 0) {
-    throw new Error("Can't delete — this database has request history.");
-  }
-
-  await prisma.songDatabase.delete({ where: { id: songDatabaseId } });
-  revalidatePath("/dashboard/databases");
 }

@@ -36,6 +36,11 @@ function dowFilter(daysOfWeek: number[] | undefined) {
   return Prisma.sql`AND EXTRACT(DOW FROM ${localRequestedAt})::int IN (${Prisma.join(daysOfWeek)})`;
 }
 
+// Auto-added via a SongPairing rule (see src/actions/requests.ts), not a
+// real request — appended to every query below so these never inflate
+// "most requested" or any other Statistics figure, regardless of status.
+const NOT_PAIRED_ADDITION = Prisma.sql`AND "isPairedAddition" = false`;
+
 export type Overview = {
   totalRequests: number;
   totalTipCents: number;
@@ -52,7 +57,7 @@ export async function getOverview({ from, to, daysOfWeek }: DateRange): Promise<
       SUM(CASE WHEN "tipAmountCents" > 0 THEN "tipAmountCents" ELSE 0 END) AS "totalTipCents",
       COUNT(*) FILTER (WHERE "tipAmountCents" > 0) AS "tippedRequestCount"
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
   `);
 
   const row = rows[0];
@@ -74,7 +79,7 @@ export async function getMostRequestedSongs({ from, to, daysOfWeek }: DateRange,
   const rows = await prisma.$queryRaw<{ songName: string; artistName: string; value: bigint }[]>(Prisma.sql`
     SELECT "songName", "artistName", COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
     GROUP BY "songName", "artistName"
     ORDER BY value DESC
     LIMIT ${limit}
@@ -89,7 +94,7 @@ export async function getMostProfitableSongs(
   const rows = await prisma.$queryRaw<{ songName: string; artistName: string; value: bigint }[]>(Prisma.sql`
     SELECT "songName", "artistName", SUM("tipAmountCents") AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
     GROUP BY "songName", "artistName"
     HAVING SUM("tipAmountCents") > 0
     ORDER BY value DESC
@@ -105,7 +110,7 @@ export async function getTopTippingSongsByAverage(
   const rows = await prisma.$queryRaw<{ songName: string; artistName: string; value: number }[]>(Prisma.sql`
     SELECT "songName", "artistName", ROUND(AVG("tipAmountCents")) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} AND "tipAmountCents" > 0 ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} AND "tipAmountCents" > 0 ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
     GROUP BY "songName", "artistName"
     ORDER BY value DESC
     LIMIT ${limit}
@@ -122,7 +127,7 @@ export async function getMostRequestedArtists(
   const rows = await prisma.$queryRaw<{ label: string; value: bigint }[]>(Prisma.sql`
     SELECT "artistName" AS label, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
     GROUP BY "artistName"
     ORDER BY value DESC
     LIMIT ${limit}
@@ -134,7 +139,7 @@ export async function getMostRequestedDecades({ from, to, daysOfWeek }: DateRang
   const rows = await prisma.$queryRaw<{ label: string; value: bigint }[]>(Prisma.sql`
     SELECT COALESCE("decade", 'Unknown') AS label, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
     GROUP BY label
     ORDER BY value DESC
   `);
@@ -146,7 +151,7 @@ export async function getMostRequestedDatabases({ from, to, daysOfWeek }: DateRa
     SELECT sd.name AS label, COUNT(*) AS value
     FROM "Request" r
     JOIN "SongDatabase" sd ON sd.id = r."songDatabaseId"
-    WHERE r."requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE r."requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} AND r."isPairedAddition" = false
     GROUP BY sd.name
     ORDER BY value DESC
   `);
@@ -159,7 +164,7 @@ export async function getMonthly({ from, to, daysOfWeek }: DateRange): Promise<M
   const rows = await prisma.$queryRaw<{ month: Date; requests: bigint; tipcents: bigint }[]>(Prisma.sql`
     SELECT date_trunc('month', ${localRequestedAt}) AS month, COUNT(*) AS requests, SUM("tipAmountCents") AS tipcents
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
     GROUP BY month
     ORDER BY month ASC
   `);
@@ -176,7 +181,7 @@ export async function getRequestsByDayOfWeek({ from, to, daysOfWeek }: DateRange
   const rows = await prisma.$queryRaw<{ dow: number; value: bigint }[]>(Prisma.sql`
     SELECT EXTRACT(DOW FROM ${localRequestedAt})::int AS dow, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
     GROUP BY dow
     ORDER BY value DESC
   `);
@@ -187,7 +192,7 @@ export async function getRequestsByHour({ from, to, daysOfWeek }: DateRange): Pr
   const rows = await prisma.$queryRaw<{ hour: number; value: bigint }[]>(Prisma.sql`
     SELECT EXTRACT(HOUR FROM ${localRequestedAt})::int AS hour, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${NOT_PAIRED_ADDITION}
     GROUP BY hour
     ORDER BY value DESC
   `);

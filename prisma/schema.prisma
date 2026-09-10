@@ -60,6 +60,33 @@ model Song {
   @@index([songDatabaseId, decade])
 }
 
+// A DJ-defined rule: requesting `fromSong` should also auto-queue `toSong`
+// (a known no-break transition), without a real audience request existing
+// for `toSong`. Global by song name+artist rather than scoped to one
+// SongDatabase/Song row — the same two physical songs are catalogued
+// separately (different Song ids) in every database that includes them
+// (e.g. a "Guitar" set list and an "All Songs" superset), and a pairing
+// should apply in all of them. Also means pairings survive a CSV replace
+// (importSongsCsv deletes+recreates every Song row), unlike anything keyed
+// to a Song id would. Applied in src/actions/requests.ts when a real
+// request is created — matched by the triggering request's snapshot
+// songName/artistName, then resolved against a Song row in that same
+// request's own database (skipped if the target song isn't in that
+// database's catalog). Each resulting auto-added Request row is linked back
+// to the request that triggered it via Request.triggeredByRequestId, and
+// flagged Request.isPairedAddition so it never counts in Statistics.
+model SongPairing {
+  id             String   @id @default(cuid())
+  fromSongName   String
+  fromArtistName String
+  toSongName     String
+  toArtistName   String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([fromSongName, fromArtistName, toSongName, toArtistName])
+  @@index([fromSongName, fromArtistName])
+}
+
 // The partial index that keeps Live Queue reads fast regardless of history
 // size (`CREATE INDEX ... ON "Request" (...) WHERE status = 'QUEUED'`) is
 // also added via the hand-written migration — Prisma has no `@@index` syntax
@@ -85,6 +112,16 @@ model Request {
   playedAt    DateTime?     @db.Timestamptz(3)
   deletedAt   DateTime?     @db.Timestamptz(3)
 
+  // Auto-added via a SongPairing rule rather than a real audience/DJ
+  // request — excluded from every Statistics query (src/lib/statistics.ts)
+  // regardless of status, since nobody actually requested it. Resolves
+  // (PLAYED/DELETED) in lockstep with triggeredByRequest: the Live Queue
+  // only ever acts on the pair as a unit, never on this row alone.
+  isPairedAddition    Boolean   @default(false)
+  triggeredByRequestId String?
+  triggeredByRequest   Request?  @relation("PairingTrigger", fields: [triggeredByRequestId], references: [id], onDelete: Cascade)
+  triggeredPairings    Request[] @relation("PairingTrigger")
+
   tipAmountCents        Int           @default(0)
   // Legacy Stripe-era payments — historical/audit only, no code path writes
   // these going forward. Kept alongside the Square fields rather than
@@ -101,12 +138,18 @@ model Request {
 
   @@index([songDatabaseId, status])
   @@index([status, songDatabaseId, requestedAt])
+  @@index([triggeredByRequestId])
 }
 
 model SearchLog {
   id             String       @id @default(cuid())
   songDatabaseId String
-  songDatabase   SongDatabase @relation(fields: [songDatabaseId], references: [id])
+  // Cascades (unlike Request's deliberate RESTRICT) — search logs are
+  // disposable analytics, not an audit trail, and this RESTRICT was
+  // silently blocking Song Databases > Delete with no readable reason (the
+  // thrown FK error hit Next's production Server Action redaction and
+  // surfaced only as "Minified React error #441").
+  songDatabase   SongDatabase @relation(fields: [songDatabaseId], references: [id], onDelete: Cascade)
   searchTerm     String
   resultsFound   Boolean
   eventType      String // 'debounce' | 'submit' | 'select'

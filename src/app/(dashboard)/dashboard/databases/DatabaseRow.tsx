@@ -25,13 +25,14 @@ export default function DatabaseRow({
   const [renaming, setRenaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function runAction(fn: (formData: FormData) => Promise<void>, formData: FormData) {
+  async function runAction(
+    fn: (formData: FormData) => Promise<{ success: true } | { success: false; error: string }>,
+    formData: FormData
+  ) {
     setError(null);
-    try {
-      await fn(formData);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    }
+    const result = await fn(formData);
+    if (!result.success) setError(result.error);
+    return result.success;
   }
 
   return (
@@ -42,8 +43,8 @@ export default function DatabaseRow({
             className="flex-1 flex gap-2"
             action={async (formData) => {
               formData.set("songDatabaseId", id);
-              await runAction(renameSongDatabase, formData);
-              setRenaming(false);
+              const ok = await runAction(renameSongDatabase, formData);
+              if (ok) setRenaming(false);
             }}
           >
             <input
@@ -78,7 +79,12 @@ export default function DatabaseRow({
             Active
           </span>
         ) : (
-          <form action={(fd) => runAction(setActiveDatabase, fd)} className="shrink-0">
+          <form
+            action={(fd) => {
+              void runAction(setActiveDatabase, fd);
+            }}
+            className="shrink-0"
+          >
             <input type="hidden" name="songDatabaseId" value={id} />
             <button
               type="submit"
@@ -96,14 +102,22 @@ export default function DatabaseRow({
             Rename
           </button>
         )}
-        <form action={(fd) => runAction(duplicateSongDatabase, fd)}>
+        <form
+          action={(fd) => {
+            void runAction(duplicateSongDatabase, fd);
+          }}
+        >
           <input type="hidden" name="songDatabaseId" value={id} />
           <button type="submit" className="hover:text-foreground">
             Duplicate
           </button>
         </form>
         {canDelete && (
-          <form action={(fd) => runAction(deleteSongDatabase, fd)}>
+          <form
+            action={(fd) => {
+              void runAction(deleteSongDatabase, fd);
+            }}
+          >
             <input type="hidden" name="songDatabaseId" value={id} />
             <button type="submit" className="text-danger hover:underline">
               Delete
