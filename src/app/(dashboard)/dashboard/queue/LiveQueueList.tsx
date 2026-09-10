@@ -106,7 +106,7 @@ export default function LiveQueueList({
   }
 
   return (
-    <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    <ul className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
       {queue.map((item) => (
         <li key={item.id} className="rounded-xl border border-border bg-surface p-4 flex flex-row sm:flex-col gap-3">
           <div className="flex-1 min-w-0 flex flex-col gap-3">
