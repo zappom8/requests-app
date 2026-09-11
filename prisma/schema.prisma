@@ -60,31 +60,35 @@ model Song {
   @@index([songDatabaseId, decade])
 }
 
-// A DJ-defined rule: requesting `fromSong` should also auto-queue `toSong`
-// (a known no-break transition), without a real audience request existing
-// for `toSong`. Global by song name+artist rather than scoped to one
-// SongDatabase/Song row — the same two physical songs are catalogued
-// separately (different Song ids) in every database that includes them
-// (e.g. a "Guitar" set list and an "All Songs" superset), and a pairing
-// should apply in all of them. Also means pairings survive a CSV replace
-// (importSongsCsv deletes+recreates every Song row), unlike anything keyed
-// to a Song id would. Applied in src/actions/requests.ts when a real
-// request is created — matched by the triggering request's snapshot
-// songName/artistName, then resolved against a Song row in that same
-// request's own database (skipped if the target song isn't in that
-// database's catalog). Each resulting auto-added Request row is linked back
-// to the request that triggered it via Request.triggeredByRequestId, and
-// flagged Request.isPairedAddition so it never counts in Statistics.
-model SongPairing {
-  id             String   @id @default(cuid())
-  fromSongName   String
-  fromArtistName String
-  toSongName     String
-  toArtistName   String
-  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+// A DJ-defined group of songs that all transition into each other with no
+// break (e.g. a mashup set) — requesting any one auto-queues every other
+// member as a linked song, without a real audience request existing for
+// them. Membership rows share a `groupId` (no separate parent-group table;
+// the id is just a shared grouping key generated when a group is created —
+// deleting a group means deleting every row with that id). Global by song
+// name+artist rather than scoped to one SongDatabase/Song row — the same
+// physical song is catalogued as a separate Song row in every database
+// that includes it (e.g. a "Guitar" set list and an "All Songs" superset),
+// and a group should apply in all of them. Also means groups survive a CSV
+// replace (importSongsCsv deletes+recreates every Song row), unlike
+// anything keyed to a Song id would. Applied in src/actions/requests.ts
+// when a real request is created — matched by the triggering request's
+// snapshot songName/artistName against every group it's a member of, then
+// each *other* member resolved against a Song row in that same request's
+// own database (skipped if that member isn't in the database's catalog).
+// Each resulting auto-added Request row is linked back to the request that
+// triggered it via Request.triggeredByRequestId, and flagged
+// Request.isPairedAddition so it never counts in Statistics.
+model SongPairingGroupMember {
+  id         String   @id @default(cuid())
+  groupId    String
+  songName   String
+  artistName String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
-  @@unique([fromSongName, fromArtistName, toSongName, toArtistName])
-  @@index([fromSongName, fromArtistName])
+  @@unique([groupId, songName, artistName])
+  @@index([groupId])
+  @@index([songName, artistName])
 }
 
 // The partial index that keeps Live Queue reads fast regardless of history
