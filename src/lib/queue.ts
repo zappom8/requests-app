@@ -66,14 +66,26 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
   }
 
   const items: GroupedRequest[] = Array.from(groups.values()).map((group) => {
+    // A real request landing on a song that's already queued as a pure
+    // auto-paired addition merges into this same group (same songId) — but
+    // the auto-added row was never a real ask, so once real demand exists
+    // it must never count toward "how many people want this" or backdate
+    // the request to whenever the pairing fired, or it silently jumps the
+    // queue ahead of songs only one real person asked for. Every stat below
+    // is computed from real members when there are any; the auto-added
+    // row's id still rides along in requestIds so resolving the real
+    // request also resolves it, just with zero influence on ordering.
+    const realMembers = group.filter((r) => !r.isPairedAddition);
+    const statsGroup = realMembers.length > 0 ? realMembers : group;
+
     // Highest tip first, then earliest request — this member becomes the
     // "primary" requester shown, and its tip/payment status represents the group.
-    const [primary] = [...group].sort(
+    const [primary] = [...statsGroup].sort(
       (a, b) => b.tipAmountCents - a.tipAmountCents || a.requestedAt.getTime() - b.requestedAt.getTime()
     );
-    const earliestRequestedAt = group.reduce(
+    const earliestRequestedAt = statsGroup.reduce(
       (min, r) => (r.requestedAt < min ? r.requestedAt : min),
-      group[0].requestedAt
+      statsGroup[0].requestedAt
     );
 
     return {
@@ -81,13 +93,13 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
       songName: primary.songName,
       artistName: primary.artistName,
       requesterName: primary.requesterName,
-      otherRequesterCount: group.length - 1,
-      wantsShoutOut: group.some((r) => r.wantsShoutOut),
+      otherRequesterCount: statsGroup.length - 1,
+      wantsShoutOut: statsGroup.some((r) => r.wantsShoutOut),
       tipAmountCents: primary.tipAmountCents,
       paymentStatus: primary.paymentStatus,
       requestedAt: earliestRequestedAt,
-      isFiller: group.every((r) => isFillerName(r.requesterName)),
-      isPairedAddition: group.every((r) => r.isPairedAddition),
+      isFiller: statsGroup.every((r) => isFillerName(r.requesterName)),
+      isPairedAddition: realMembers.length === 0,
       // Representative only — real (non-paired) groups never read this, and
       // a paired group is a single SongPairing target, so its members (if
       // ever more than one, e.g. a rare create race) all point at the same trigger.

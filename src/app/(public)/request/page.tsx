@@ -32,7 +32,16 @@ export default async function RequestPage() {
       select: { defaultTipAmountsCents: true, disableRecentlyPlayedPrompt: true },
     }),
     prisma.request.findMany({
-      where: { songDatabaseId: activeSongDatabaseId, status: "PLAYED", playedAt: { gte: oneHourAgo }, songId: { not: null } },
+      // isPairedAddition excluded — an auto-paired song was never a real
+      // request, so it shouldn't trigger the "this was just played" prompt
+      // any more than it counts toward Statistics.
+      where: {
+        songDatabaseId: activeSongDatabaseId,
+        status: "PLAYED",
+        playedAt: { gte: oneHourAgo },
+        songId: { not: null },
+        isPairedAddition: false,
+      },
       select: { songId: true, playedAt: true },
       orderBy: { playedAt: "desc" },
     }),
