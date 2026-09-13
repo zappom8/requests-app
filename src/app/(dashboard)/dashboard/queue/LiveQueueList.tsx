@@ -39,8 +39,13 @@ export default function LiveQueueList({
   const [bangerMode, setBangerModeState] = useState(false);
   const [currentVenueId, setCurrentVenueIdState] = useState(initialVenueId);
   const [pendingActionId, setPendingActionIdState] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndexState] = useState(0);
   const refetchSeq = useRef(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // One entry per currently-rendered card, in display order — measured to
+  // figure out how many cards fit per row (the grid reflows with window
+  // width, so this can't be a fixed constant) for Up/Down navigation.
+  const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   // The keydown listener below is registered exactly once (empty deps) so
   // rapid repeated presses — five Space presses in under a second — can't
@@ -70,6 +75,12 @@ export default function LiveQueueList({
   // is filtered through this set so a still-in-flight removal can never be
   // un-done by a refetch that simply hasn't caught up yet.
   const pendingRemovals = useRef<Set<string>>(new Set());
+  const selectedIndexRef = useRef(selectedIndex);
+
+  function setSelectedIndex(next: number) {
+    selectedIndexRef.current = next;
+    setSelectedIndexState(next);
+  }
 
   function setQueue(next: SerializedItem[]) {
     queueRef.current = next;
@@ -93,6 +104,24 @@ export default function LiveQueueList({
 
   function computeDisplayedQueue(q: SerializedItem[], mode: boolean, keys: Set<string>) {
     return mode ? q.filter((item) => item.tipAmountCents > 0 || keys.has(bangerKey(item.songName, item.artistName))) : q;
+  }
+
+  // How many cards the grid is currently fitting per row — the grid is
+  // auto-fill/minmax so this reflows with window width and can't be a
+  // fixed constant. Cards sharing the first card's offsetTop are on the
+  // same row (grid-auto-flow is row by default, so DOM order === visual
+  // left-to-right, top-to-bottom order).
+  function getColumnCount(length: number): number {
+    const items = itemRefs.current;
+    const first = items[0];
+    if (length === 0 || !first) return 1;
+    let count = 0;
+    for (let i = 0; i < length; i++) {
+      const el = items[i];
+      if (!el || el.offsetTop !== first.offsetTop) break;
+      count++;
+    }
+    return Math.max(count, 1);
   }
 
   useEffect(() => {
@@ -137,7 +166,18 @@ export default function LiveQueueList({
     };
   }, [songDatabaseId]);
 
+  // Keeps keyboard navigation continuing sensibly from wherever the mouse
+  // was just used too — e.g. click PLAYED on card 3, then switch to the
+  // keyboard, and arrow keys/Space carry on from card 3's position rather
+  // than wherever the selection last happened to be.
+  function syncSelectionToItem(item: SerializedItem) {
+    const list = computeDisplayedQueue(queueRef.current, bangerModeRef.current, bangerKeysRef.current);
+    const index = list.findIndex((i) => i.id === item.id);
+    if (index !== -1) setSelectedIndex(index);
+  }
+
   async function handlePlayed(item: SerializedItem) {
+    syncSelectionToItem(item);
     pendingRemovals.current.add(item.id);
     setPendingActionId(item.id);
     setQueue(queueRef.current.filter((i) => i.id !== item.id)); // optimistic
@@ -150,6 +190,7 @@ export default function LiveQueueList({
   }
 
   async function handleDelete(item: SerializedItem) {
+    syncSelectionToItem(item);
     pendingRemovals.current.add(item.id);
     setPendingActionId(item.id);
     setQueue(queueRef.current.filter((i) => i.id !== item.id)); // optimistic
@@ -171,13 +212,21 @@ export default function LiveQueueList({
   const displayedQueue = computeDisplayedQueue(queue, bangerMode, bangerKeys);
 
   // Laptop workflow: cycling through the live queue at a gig, hands on the
-  // keyboard — Space or Enter marks the top (next-up) request played
-  // without reaching for the mouse, and B toggles Banger Mode. Registered
-  // exactly once (see the refs above for why) rather than depending on
-  // queue/pendingActionId/etc.
+  // keyboard. Arrow keys move a highlighted selection across/down the grid
+  // (so you're not stuck only ever acting on the top card — e.g. skip past
+  // "Blinding Lights" to play "I'm Gonna Be" further down without touching
+  // the mouse), Space/Enter plays whatever's selected, Delete/Backspace
+  // removes it, and B toggles Banger Mode. Registered exactly once (see
+  // the refs above for why) rather than depending on queue/pendingActionId/etc.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Don't hijack keys while a real form control has focus (e.g. the
+      // venue <select> uses arrow keys itself to change its own value).
+      const active = document.activeElement;
+      const tag = active instanceof HTMLElement ? active.tagName : "";
+      if (tag === "SELECT" || tag === "INPUT" || tag === "TEXTAREA") return;
+
       if (e.key.toLowerCase() === "b") {
         e.preventDefault();
         const next = !bangerModeRef.current;
@@ -195,10 +244,31 @@ export default function LiveQueueList({
         }
         return;
       }
-      if (e.code !== "Space" && e.key !== "Enter") return;
+
+      const isArrow = e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
+      if (isArrow) {
+        e.preventDefault();
+        const list = computeDisplayedQueue(queueRef.current, bangerModeRef.current, bangerKeysRef.current);
+        if (list.length === 0) return;
+        const current = Math.min(selectedIndexRef.current, list.length - 1);
+        const columns = getColumnCount(list.length);
+        let next = current;
+        if (e.key === "ArrowRight") next = current + 1;
+        else if (e.key === "ArrowLeft") next = current - 1;
+        else if (e.key === "ArrowDown") next = current + columns;
+        else if (e.key === "ArrowUp") next = current - columns;
+        setSelectedIndex(Math.max(0, Math.min(next, list.length - 1)));
+        return;
+      }
+
+      if (e.code !== "Space" && e.key !== "Enter" && e.key !== "Delete" && e.key !== "Backspace") return;
       e.preventDefault();
-      const top = computeDisplayedQueue(queueRef.current, bangerModeRef.current, bangerKeysRef.current)[0];
-      if (top && pendingActionIdRef.current !== top.id) handlePlayed(top);
+      const list = computeDisplayedQueue(queueRef.current, bangerModeRef.current, bangerKeysRef.current);
+      if (list.length === 0) return;
+      const target = list[Math.min(selectedIndexRef.current, list.length - 1)];
+      if (!target || pendingActionIdRef.current === target.id) return;
+      if (e.key === "Delete" || e.key === "Backspace") handleDelete(target);
+      else handlePlayed(target);
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -249,8 +319,19 @@ export default function LiveQueueList({
         </p>
       ) : (
         <ul className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
-          {displayedQueue.map((item) => (
-            <li key={item.id} className="rounded-xl border border-border bg-surface overflow-hidden">
+          {displayedQueue.map((item, index) => (
+            <li
+              key={item.id}
+              ref={(el) => {
+                itemRefs.current[index] = el;
+              }}
+              onClick={() => setSelectedIndex(index)}
+              className={`rounded-xl border bg-surface overflow-hidden transition-shadow ${
+                index === Math.min(selectedIndex, displayedQueue.length - 1)
+                  ? "border-accent ring-2 ring-accent"
+                  : "border-border"
+              }`}
+            >
               {item.linkedSongs.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 bg-accent/15 px-4 py-1.5 text-xs font-medium text-accent-hover">
                   <span>🔗 Also cues:</span>
