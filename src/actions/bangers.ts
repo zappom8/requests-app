@@ -3,16 +3,21 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-export async function addBanger(formData: FormData) {
-  const venueId = String(formData.get("venueId") ?? "");
-  const songName = String(formData.get("songName") ?? "").trim();
-  const artistName = String(formData.get("artistName") ?? "").trim();
-  if (!venueId || !songName || !artistName) throw new Error("A venue and song are required");
+export type SongRef = { songName: string; artistName: string };
 
-  await prisma.bangerSong.upsert({
-    where: { venueId_songName_artistName: { venueId, songName, artistName } },
-    create: { venueId, songName, artistName },
-    update: {},
+// Bulk add — the picker lets you check off any number of songs and add
+// them all in one go, since adding a venue's whole hype list one song at a
+// time was too slow. skipDuplicates makes this a safe no-op for anything
+// already on the list rather than an error.
+export async function addBangers(formData: FormData) {
+  const venueId = String(formData.get("venueId") ?? "");
+  const songs = JSON.parse(String(formData.get("songs") ?? "[]")) as SongRef[];
+  const valid = songs.filter((s) => s.songName?.trim() && s.artistName?.trim());
+  if (!venueId || valid.length === 0) throw new Error("A venue and at least one song are required");
+
+  await prisma.bangerSong.createMany({
+    data: valid.map((s) => ({ venueId, songName: s.songName.trim(), artistName: s.artistName.trim() })),
+    skipDuplicates: true,
   });
 
   revalidatePath("/dashboard/bangers");

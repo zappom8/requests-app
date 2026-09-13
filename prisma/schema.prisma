@@ -50,6 +50,14 @@ model Song {
   name           String
   artist         String
   decade         String?
+  // The recording's key, and the key Lochie actually performs it in when
+  // they differ (e.g. transposed down for his vocal range). Purely
+  // catalog/reference metadata — deliberately not used by song pairing
+  // matching (src/actions/requests.ts), since he may transpose further on
+  // the night depending on how his voice is doing, and a pairing shouldn't
+  // silently break over that.
+  originalKey    String?
+  lochiesKey     String?
   genres         String[]     @default([])
   requests       Request[]
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)

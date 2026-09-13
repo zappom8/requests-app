@@ -23,7 +23,15 @@ export async function createSongDatabase(formData: FormData): Promise<ActionResu
       await prisma.songDatabase.create({
         data: {
           name,
-          songs: { create: songs.map((s) => ({ name: s.name, artist: s.artist, decade: s.decade })) },
+          songs: {
+            create: songs.map((s) => ({
+              name: s.name,
+              artist: s.artist,
+              decade: s.decade,
+              originalKey: s.originalKey,
+              lochiesKey: s.lochiesKey,
+            })),
+          },
         },
       });
     } else {
@@ -88,6 +96,8 @@ export async function duplicateSongDatabase(formData: FormData): Promise<ActionR
             name: song.name,
             artist: song.artist,
             decade: song.decade,
+            originalKey: song.originalKey,
+            lochiesKey: song.lochiesKey,
           })),
         },
       },

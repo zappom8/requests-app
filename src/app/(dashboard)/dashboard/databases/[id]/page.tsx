@@ -39,7 +39,7 @@ export default async function SongManagerPage({
         </a>
       </div>
 
-      <form action={createSong} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_120px_auto] gap-2">
+      <form action={createSong} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_90px_90px_90px_auto] gap-2">
         <input type="hidden" name="songDatabaseId" value={database.id} />
         <input
           type="text"
@@ -59,6 +59,18 @@ export default async function SongManagerPage({
           type="text"
           name="decade"
           placeholder="Decade"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <input
+          type="text"
+          name="originalKey"
+          placeholder="Original key"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <input
+          type="text"
+          name="lochiesKey"
+          placeholder="Lochie's key"
           className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
         />
         <button
