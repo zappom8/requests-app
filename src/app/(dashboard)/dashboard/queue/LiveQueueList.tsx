@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { AdminQueueItem } from "@/lib/queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { markPlayed, deleteRequest } from "@/actions/queue";
+import { setCurrentVenue } from "@/actions/venues";
+import { bangerKey } from "@/lib/bangerKey";
 
 type SerializedItem = Omit<AdminQueueItem, "requestedAt"> & { requestedAt: string };
+type Venue = { id: string; name: string };
 
 const FALLBACK_POLL_MS = 30000;
 // Marking several songs played in quick succession fires one broadcast per
@@ -20,11 +23,20 @@ const REFETCH_DEBOUNCE_MS = 400;
 export default function LiveQueueList({
   initialQueue,
   songDatabaseId,
+  initialBangerKeys,
+  venues,
+  initialVenueId,
 }: {
   initialQueue: SerializedItem[];
   songDatabaseId: string;
+  initialBangerKeys: string[];
+  venues: Venue[];
+  initialVenueId: string | null;
 }) {
   const [queue, setQueue] = useState(initialQueue);
+  const [bangerKeys, setBangerKeys] = useState(new Set(initialBangerKeys));
+  const [bangerMode, setBangerMode] = useState(false);
+  const [currentVenueId, setCurrentVenueId] = useState(initialVenueId);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const refetchSeq = useRef(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,7 +52,11 @@ export default function LiveQueueList({
         // Ignore this response if a newer refetch has started since it was
         // sent — otherwise a slower, older request can resolve after a
         // faster, newer one and clobber the fresher state with stale data.
-        if (!cancelled && seq === refetchSeq.current) setQueue(data.queue ?? []);
+        if (!cancelled && seq === refetchSeq.current) {
+          setQueue(data.queue ?? []);
+          setBangerKeys(new Set(data.bangerKeys ?? []));
+          setCurrentVenueId(data.currentVenueId ?? null);
+        }
       } catch {
         // transient network error — next broadcast or fallback poll will retry
       }
@@ -87,34 +103,86 @@ export default function LiveQueueList({
     }
   }
 
+  // Banger Mode is a pure view filter over the same queue — it never
+  // changes what the audience can request or what actually gets queued.
+  // Surfaces the moments worth spotlighting: any tipped request (money
+  // always signals "pay attention"), plus shout-outs specifically for a
+  // song on the Bangers list (a shout-out alone doesn't need the callout,
+  // but paired with a hype song it's a moment worth building up to).
+  const displayedQueue = bangerMode
+    ? queue.filter(
+        (item) =>
+          item.tipAmountCents > 0 ||
+          (item.shoutOutRequesterNames.length > 0 && bangerKeys.has(bangerKey(item.songName, item.artistName)))
+      )
+    : queue;
+
   // Laptop workflow: cycling through the live queue at a gig, hands on the
-  // keyboard — Space or Enter marks the top (next-up) request played without
-  // reaching for the mouse.
+  // keyboard — Space or Enter marks the top (next-up) request played
+  // without reaching for the mouse, and B toggles Banger Mode.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setBangerMode((on) => !on);
+        return;
+      }
       if (e.code !== "Space" && e.key !== "Enter") return;
       e.preventDefault();
-      const top = queue[0];
+      const top = displayedQueue[0];
       if (top && pendingActionId !== top.id) handlePlayed(top);
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [queue, pendingActionId]);
+  }, [displayedQueue, pendingActionId]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Live Queue</h1>
-        <span className="text-sm text-foreground-muted">
-          {queue.length} in queue
-        </span>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold">Live Queue</h1>
+          {bangerMode && (
+            <span className="rounded-full bg-tip/20 px-3 py-1 text-xs font-bold text-tip">
+              🔥 BANGER MODE — press B to exit
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-xs text-foreground-muted">
+            Venue
+            <select
+              value={currentVenueId ?? ""}
+              onChange={(e) => {
+                const venueId = e.target.value;
+                setCurrentVenueId(venueId || null);
+                const formData = new FormData();
+                formData.set("venueId", venueId);
+                void setCurrentVenue(formData);
+              }}
+              className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-accent"
+            >
+              <option value="">None</option>
+              {venues.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-sm text-foreground-muted">
+            {bangerMode ? `${displayedQueue.length} bangers` : `${queue.length} in queue`}
+          </span>
+        </div>
       </div>
 
-      {queue.length === 0 ? (
-        <p className="text-foreground-muted text-center py-12">Queue is empty.</p>
+      {displayedQueue.length === 0 ? (
+        <p className="text-foreground-muted text-center py-12">
+          {bangerMode ? "No bangers in the queue right now." : "Queue is empty."}
+        </p>
       ) : (
         <ul className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
-          {queue.map((item) => (
+          {displayedQueue.map((item) => (
             <li key={item.id} className="rounded-xl border border-border bg-surface overflow-hidden">
               {item.linkedSongs.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 bg-accent/15 px-4 py-1.5 text-xs font-medium text-accent-hover">
@@ -129,9 +197,16 @@ export default function LiveQueueList({
               <div className="p-4 flex flex-row sm:flex-col gap-3">
                 <div className="flex-1 min-w-0 flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-lg font-semibold truncate">{item.songName}</p>
-                      <p className="text-foreground-muted truncate">{item.artistName}</p>
+                    <div className="min-w-0 flex items-start gap-2">
+                      {item.tipAmountCents > 0 && (
+                        <span className="text-2xl leading-none shrink-0" aria-hidden>
+                          💰
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-lg font-semibold truncate">{item.songName}</p>
+                        <p className="text-foreground-muted truncate">{item.artistName}</p>
+                      </div>
                     </div>
                     {/* suppressHydrationWarning: locale/timezone-formatted time will
                         legitimately differ between server render and the browser
@@ -148,7 +223,9 @@ export default function LiveQueueList({
                       {item.otherRequesterCount > 0 &&
                         ` and ${item.otherRequesterCount} other${item.otherRequesterCount === 1 ? "" : "s"}`}
                     </p>
-                    {item.wantsShoutOut && <p className="text-tip font-medium">⭐ Wants a shout-out</p>}
+                    {item.shoutOutRequesterNames.length > 0 && (
+                      <p className="text-tip font-medium">⭐ Shout-out for {item.shoutOutRequesterNames.join(", ")}</p>
+                    )}
                     {item.tipAmountCents > 0 && (
                       <p className="text-tip font-semibold mt-1">
                         Tipped ${(item.tipAmountCents / 100).toFixed(2)}

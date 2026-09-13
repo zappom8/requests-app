@@ -1,13 +1,22 @@
-import { getActiveSongDatabaseId } from "@/lib/settings";
+import { prisma } from "@/lib/prisma";
+import { getActiveSongDatabaseId, getCurrentVenueId } from "@/lib/settings";
 import { getAdminQueue } from "@/lib/queue";
+import { getBangerKeys } from "@/lib/bangers";
 import LiveQueueList from "./LiveQueueList";
 
 // Always needs current queue state — never statically cached.
 export const dynamic = "force-dynamic";
 
 export default async function LiveQueuePage() {
-  const activeSongDatabaseId = await getActiveSongDatabaseId();
-  const queue = activeSongDatabaseId ? await getAdminQueue(activeSongDatabaseId) : [];
+  const [activeSongDatabaseId, currentVenueId, venues] = await Promise.all([
+    getActiveSongDatabaseId(),
+    getCurrentVenueId(),
+    prisma.venue.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ]);
+  const [queue, bangerKeys] = await Promise.all([
+    activeSongDatabaseId ? getAdminQueue(activeSongDatabaseId) : Promise.resolve([]),
+    getBangerKeys(currentVenueId),
+  ]);
 
   if (!activeSongDatabaseId) {
     return <p className="text-foreground-muted">No song database is active right now.</p>;
@@ -25,7 +34,13 @@ export default async function LiveQueuePage() {
     // "full-bleed" trick (100vw + negative-margin recentre) breaks it out
     // of that ancestor constraint without touching the shared layout.
     <div className="w-screen ml-[50%] -translate-x-1/2 px-4 sm:px-6">
-      <LiveQueueList initialQueue={serialized} songDatabaseId={activeSongDatabaseId} />
+      <LiveQueueList
+        initialQueue={serialized}
+        songDatabaseId={activeSongDatabaseId}
+        initialBangerKeys={bangerKeys}
+        venues={venues}
+        initialVenueId={currentVenueId}
+      />
     </div>
   );
 }

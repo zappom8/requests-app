@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/queue", label: "Live Queue" },
   { href: "/dashboard/databases", label: "Song Databases" },
   { href: "/dashboard/pairings", label: "Song Pairings" },
+  { href: "/dashboard/bangers", label: "Bangers" },
   { href: "/dashboard/history", label: "Request History" },
   { href: "/dashboard/bookings", label: "Bookings" },
   { href: "/dashboard/payments", label: "Tips & Payments" },

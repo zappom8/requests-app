@@ -91,6 +91,36 @@ model SongPairingGroupMember {
   @@index([songName, artistName])
 }
 
+// Different gigs call for different hype songs, so bangers are scoped per
+// Venue rather than global. The Live Queue's venue selector sets
+// Settings.currentVenueId, and Banger Mode (toggled with the B key) reads
+// bangers for whichever venue is currently selected there.
+model Venue {
+  id        String       @id @default(cuid())
+  name      String
+  bangers   BangerSong[]
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+}
+
+// A DJ-curated "hype" list, scoped to one Venue. Purely a dashboard lens:
+// Live Queue's "banger mode" filters the *existing* queue down to tipped
+// requests plus shout-out requests whose song is on the current venue's
+// list — it never restricts what the audience can request or changes what
+// gets queued, so unlike SongPairingGroupMember it has nothing to do with
+// src/actions/requests.ts.
+model BangerSong {
+  id         String   @id @default(cuid())
+  venueId    String
+  venue      Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  songName   String
+  artistName String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([venueId, songName, artistName])
+  @@index([venueId])
+}
+
 // The partial index that keeps Live Queue reads fast regardless of history
 // size (`CREATE INDEX ... ON "Request" (...) WHERE status = 'QUEUED'`) is
 // also added via the hand-written migration — Prisma has no `@@index` syntax
@@ -167,6 +197,10 @@ model SearchLog {
 model Settings {
   id                     Int      @id @default(1) // singleton row, app enforces id=1
   activeSongDatabaseId   String?
+  // Which Venue's Bangers list Banger Mode reads on the Live Queue — plain
+  // string, no relation, same convention as activeSongDatabaseId (deleting
+  // the venue just leaves this pointing at nothing, harmlessly).
+  currentVenueId         String?
   bio                    String?
   photoUrl               String?
   logoUrl                String?

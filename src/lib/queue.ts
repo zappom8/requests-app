@@ -6,7 +6,7 @@ type GroupedRequest = {
   artistName: string;
   requesterName: string;
   otherRequesterCount: number;
-  wantsShoutOut: boolean;
+  shoutOutRequesterNames: string[];
   tipAmountCents: number;
   paymentStatus: string;
   requestedAt: Date;
@@ -94,7 +94,12 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
       artistName: primary.artistName,
       requesterName: primary.requesterName,
       otherRequesterCount: statsGroup.length - 1,
-      wantsShoutOut: statsGroup.some((r) => r.wantsShoutOut),
+      // Named explicitly rather than a bare boolean — "Requested by X and 1
+      // other" plus an unlabelled star left it ambiguous whether X or the
+      // other person actually wanted the shout-out. A group can have more
+      // than one (rare, but two people can both ask for the same song and
+      // both want a shout-out), so every name that asked is listed.
+      shoutOutRequesterNames: statsGroup.filter((r) => r.wantsShoutOut).map((r) => r.requesterName),
       tipAmountCents: primary.tipAmountCents,
       paymentStatus: primary.paymentStatus,
       requestedAt: earliestRequestedAt,
@@ -170,7 +175,7 @@ export type AdminQueueItem = {
   artistName: string;
   requesterName: string;
   otherRequesterCount: number;
-  wantsShoutOut: boolean;
+  shoutOutRequesterNames: string[];
   tipAmountCents: number;
   paymentStatus: string;
   requestedAt: Date;
@@ -187,7 +192,7 @@ export async function getAdminQueue(songDatabaseId: string): Promise<AdminQueueI
     artistName: g.artistName,
     requesterName: g.requesterName,
     otherRequesterCount: g.otherRequesterCount,
-    wantsShoutOut: g.wantsShoutOut,
+    shoutOutRequesterNames: g.shoutOutRequesterNames,
     tipAmountCents: g.tipAmountCents,
     paymentStatus: g.paymentStatus,
     requestedAt: g.requestedAt,
