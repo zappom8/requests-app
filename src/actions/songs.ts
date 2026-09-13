@@ -9,14 +9,12 @@ export async function createSong(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const artist = String(formData.get("artist") ?? "").trim();
   const decade = String(formData.get("decade") ?? "").trim() || null;
-  const originalKey = String(formData.get("originalKey") ?? "").trim() || null;
-  const lochiesKey = String(formData.get("lochiesKey") ?? "").trim() || null;
 
   if (!songDatabaseId || !name || !artist) {
     throw new Error("songDatabaseId, name, and artist are required");
   }
 
-  await prisma.song.create({ data: { songDatabaseId, name, artist, decade, originalKey, lochiesKey } });
+  await prisma.song.create({ data: { songDatabaseId, name, artist, decade } });
   revalidatePath(`/dashboard/databases/${songDatabaseId}`);
 }
 
@@ -26,12 +24,10 @@ export async function updateSong(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const artist = String(formData.get("artist") ?? "").trim();
   const decade = String(formData.get("decade") ?? "").trim() || null;
-  const originalKey = String(formData.get("originalKey") ?? "").trim() || null;
-  const lochiesKey = String(formData.get("lochiesKey") ?? "").trim() || null;
 
   if (!id || !name || !artist) throw new Error("name and artist are required");
 
-  await prisma.song.update({ where: { id }, data: { name, artist, decade, originalKey, lochiesKey } });
+  await prisma.song.update({ where: { id }, data: { name, artist, decade } });
   revalidatePath(`/dashboard/databases/${songDatabaseId}`);
 }
 
@@ -58,14 +54,7 @@ export async function importSongsCsv(formData: FormData) {
   await prisma.$transaction([
     prisma.song.deleteMany({ where: { songDatabaseId } }),
     prisma.song.createMany({
-      data: songs.map((s) => ({
-        songDatabaseId,
-        name: s.name,
-        artist: s.artist,
-        decade: s.decade,
-        originalKey: s.originalKey,
-        lochiesKey: s.lochiesKey,
-      })),
+      data: songs.map((s) => ({ songDatabaseId, name: s.name, artist: s.artist, decade: s.decade })),
     }),
   ]);
 

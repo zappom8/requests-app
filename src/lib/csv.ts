@@ -1,17 +1,10 @@
 import Papa from "papaparse";
 
-export type ParsedSong = {
-  name: string;
-  artist: string;
-  decade: string | null;
-  originalKey: string | null;
-  lochiesKey: string | null;
-};
+export type ParsedSong = { name: string; artist: string; decade: string | null };
 
-// Format: Song Name,Artist,Decade,Original Key,Lochie's Key — header row is
-// optional and auto-detected. The two key columns are optional even with a
-// header present (older CSVs, or ones without key data, just leave them
-// blank/absent).
+// Format: Song Name,Artist,Decade — header row is optional and auto-detected.
+// Keys live separately (SongKey, global by name+artist — see the Keys
+// dashboard tab), not in this per-database catalog CSV.
 export function parseSongsCsv(text: string): ParsedSong[] {
   const result = Papa.parse<string[]>(text, { skipEmptyLines: true });
   const rows = result.data;
@@ -26,15 +19,13 @@ export function parseSongsCsv(text: string): ParsedSong[] {
       name: (row[0] ?? "").trim(),
       artist: (row[1] ?? "").trim(),
       decade: (row[2] ?? "").trim() || null,
-      originalKey: (row[3] ?? "").trim() || null,
-      lochiesKey: (row[4] ?? "").trim() || null,
     }))
     .filter((song) => song.name && song.artist);
 }
 
 export function generateSongsCsv(songs: ParsedSong[]): string {
   return Papa.unparse({
-    fields: ["Song Name", "Artist", "Decade", "Original Key", "Lochie's Key"],
-    data: songs.map((s) => [s.name, s.artist, s.decade ?? "", s.originalKey ?? "", s.lochiesKey ?? ""]),
+    fields: ["Song Name", "Artist", "Decade"],
+    data: songs.map((s) => [s.name, s.artist, s.decade ?? ""]),
   });
 }

@@ -50,14 +50,6 @@ model Song {
   name           String
   artist         String
   decade         String?
-  // The recording's key, and the key Lochie actually performs it in when
-  // they differ (e.g. transposed down for his vocal range). Purely
-  // catalog/reference metadata — deliberately not used by song pairing
-  // matching (src/actions/requests.ts), since he may transpose further on
-  // the night depending on how his voice is doing, and a pairing shouldn't
-  // silently break over that.
-  originalKey    String?
-  lochiesKey     String?
   genres         String[]     @default([])
   requests       Request[]
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
@@ -127,6 +119,28 @@ model BangerSong {
 
   @@unique([venueId, songName, artistName])
   @@index([venueId])
+}
+
+// The recording's key, and the key Lochie actually performs it in when
+// they differ (e.g. transposed down for his vocal range). Global by song
+// name+artist rather than a column on Song — same reasoning as
+// SongPairingGroupMember/BangerSong: a song's key doesn't depend on which
+// database's set list it's catalogued in, so filling it in once should
+// apply everywhere that song appears, and it survives a CSV replace
+// (importSongsCsv deletes+recreates every Song row for a database).
+// Purely catalog/reference metadata — deliberately not read by song
+// pairing matching (src/actions/requests.ts), since he may transpose
+// further on the night depending on how his voice is doing, and a pairing
+// shouldn't silently break over that.
+model SongKey {
+  id          String   @id @default(cuid())
+  songName    String
+  artistName  String
+  originalKey String?
+  lochiesKey  String?
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([songName, artistName])
 }
 
 // The partial index that keeps Live Queue reads fast regardless of history

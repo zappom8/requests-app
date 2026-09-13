@@ -8,14 +8,7 @@ export default function SongList({
   songs,
 }: {
   songDatabaseId: string;
-  songs: {
-    id: string;
-    name: string;
-    artist: string;
-    decade: string | null;
-    originalKey: string | null;
-    lochiesKey: string | null;
-  }[];
+  songs: { id: string; name: string; artist: string; decade: string | null }[];
 }) {
   const [query, setQuery] = useState("");
 
@@ -44,8 +37,6 @@ export default function SongList({
             name={song.name}
             artist={song.artist}
             decade={song.decade}
-            originalKey={song.originalKey}
-            lochiesKey={song.lochiesKey}
           />
         ))}
         {filtered.length === 0 && (

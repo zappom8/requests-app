@@ -3,28 +3,18 @@
 import { useState } from "react";
 import { updateSong, deleteSong } from "@/actions/songs";
 
-function keyDisplay(originalKey: string | null, lochiesKey: string | null): string | null {
-  if (!originalKey && !lochiesKey) return null;
-  if (lochiesKey && originalKey && lochiesKey !== originalKey) return `Key: ${lochiesKey} (orig ${originalKey})`;
-  return `Key: ${lochiesKey ?? originalKey}`;
-}
-
 export default function SongRow({
   id,
   songDatabaseId,
   name,
   artist,
   decade,
-  originalKey,
-  lochiesKey,
 }: {
   id: string;
   songDatabaseId: string;
   name: string;
   artist: string;
   decade: string | null;
-  originalKey: string | null;
-  lochiesKey: string | null;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -36,7 +26,7 @@ export default function SongRow({
             await updateSong(formData);
             setEditing(false);
           }}
-          className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_90px_90px_90px_auto_auto] gap-2"
+          className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_120px_auto_auto] gap-2"
         >
           <input type="hidden" name="id" value={id} />
           <input type="hidden" name="songDatabaseId" value={songDatabaseId} />
@@ -58,21 +48,6 @@ export default function SongRow({
             type="text"
             name="decade"
             defaultValue={decade ?? ""}
-            placeholder="Decade"
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          <input
-            type="text"
-            name="originalKey"
-            defaultValue={originalKey ?? ""}
-            placeholder="Original key"
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          <input
-            type="text"
-            name="lochiesKey"
-            defaultValue={lochiesKey ?? ""}
-            placeholder="Lochie's key"
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
           />
           <button
@@ -93,8 +68,6 @@ export default function SongRow({
     );
   }
 
-  const key = keyDisplay(originalKey, lochiesKey);
-
   return (
     <li className="flex items-center justify-between px-4 py-3">
       <div>
@@ -102,7 +75,6 @@ export default function SongRow({
         <p className="text-xs text-foreground-muted">
           {artist}
           {decade ? ` · ${decade}` : ""}
-          {key ? ` · ${key}` : ""}
         </p>
       </div>
       <div className="flex gap-3">
