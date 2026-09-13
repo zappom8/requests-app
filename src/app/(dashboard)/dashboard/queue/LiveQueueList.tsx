@@ -156,6 +156,16 @@ export default function LiveQueueList({
       .on("broadcast", { event: "queue-changed" }, () => scheduleRefetch())
       .subscribe();
 
+    // Next.js's client-side router cache can serve a stale snapshot of
+    // this page for a while after navigating away and back (e.g. to
+    // History and back), even though the page itself is force-dynamic —
+    // that cache lives in the browser, outside the page's own rendering.
+    // Deleted/played items could briefly reappear on return, "undoing"
+    // themselves only once a broadcast or the 30s fallback poll below
+    // eventually caught up. Fetching live data immediately on mount closes
+    // that window instead of waiting on either.
+    refetchNow();
+
     const fallback = setInterval(refetchNow, FALLBACK_POLL_MS);
 
     return () => {
