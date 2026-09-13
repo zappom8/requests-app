@@ -30,7 +30,11 @@ export type HistoryItem = {
 };
 
 export function buildHistoryWhere(filters: HistoryFilters): Prisma.RequestWhereInput {
-  const where: Prisma.RequestWhereInput = {};
+  // Auto-added rows — a SongPairing trigger or a Banger Mode activation —
+  // were never a real request, so they're excluded from History (the list,
+  // its count, and "delete all filtered") exactly like they already are
+  // from Statistics and the recently-played prompt.
+  const where: Prisma.RequestWhereInput = { isPairedAddition: false, isBangerAddition: false };
 
   if (filters.song?.trim()) {
     where.songName = { contains: filters.song.trim(), mode: "insensitive" };
