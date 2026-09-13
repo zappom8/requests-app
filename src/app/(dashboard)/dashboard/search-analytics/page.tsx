@@ -1,21 +1,30 @@
-import { resolveDateRange } from "@/lib/statistics";
+import { resolveDateRange, DOW_LABELS } from "@/lib/statistics";
 import { getMostSearchedTerms, getMostUnsuccessfulSearches, getSearchTotals } from "@/lib/search-analytics";
 
 export const dynamic = "force-dynamic";
 
+const LIMIT_OPTIONS = [20, 50, 100, 200];
+
 export default async function SearchAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dateFrom?: string; dateTo?: string }>;
+  searchParams: Promise<{ dateFrom?: string; dateTo?: string; days?: string | string[]; limit?: string }>;
 }) {
   const sp = await searchParams;
-  const range = resolveDateRange(sp.dateFrom, sp.dateTo);
+  const selectedDays = sp.days === undefined ? [] : Array.isArray(sp.days) ? sp.days : [sp.days];
+  const range = resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays);
+  const limit = LIMIT_OPTIONS.includes(Number(sp.limit)) ? Number(sp.limit) : 20;
 
   const [totals, mostSearched, unsuccessful] = await Promise.all([
     getSearchTotals(range),
-    getMostSearchedTerms(range),
-    getMostUnsuccessfulSearches(range),
+    getMostSearchedTerms(range, limit),
+    getMostUnsuccessfulSearches(range, limit),
   ]);
+
+  const exportParams = new URLSearchParams();
+  if (sp.dateFrom) exportParams.set("dateFrom", sp.dateFrom);
+  if (sp.dateTo) exportParams.set("dateTo", sp.dateTo);
+  for (const d of selectedDays) exportParams.append("days", d);
 
   return (
     <div className="space-y-6">
@@ -45,12 +54,49 @@ export default async function SearchAnalyticsPage({
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
           />
         </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-foreground-muted">Days</label>
+          <div className="flex flex-wrap gap-2 py-2">
+            {DOW_LABELS.map((label, i) => (
+              <label key={label} className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  name="days"
+                  value={i}
+                  defaultChecked={selectedDays.includes(String(i))}
+                  className="h-4 w-4 accent-accent"
+                />
+                {label.slice(0, 3)}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-foreground-muted">Show top</label>
+          <select
+            name="limit"
+            defaultValue={String(limit)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+          >
+            {LIMIT_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="submit"
           className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           Filter
         </button>
+        <a
+          href={`/api/dashboard/search-analytics/export?${exportParams.toString()}`}
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:border-accent hover:text-accent-hover"
+        >
+          Download full CSV
+        </a>
       </form>
 
       <div className="grid grid-cols-2 gap-3">
