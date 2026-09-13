@@ -60,9 +60,23 @@ export default function LiveQueueList({
   const songDatabaseIdRef = useRef(songDatabaseId);
   const bangerActivationInFlight = useRef(false);
 
+  // Ids currently being marked played/deleted, from the moment the optimistic
+  // removal happens until the server call confirms it. Several rapid
+  // presses fire several concurrent markPlayed/deleteRequest calls that
+  // don't all finish at the same speed — a broadcast-triggered refetch can
+  // land in the gap and return a snapshot the slower ones haven't
+  // committed to yet, which would otherwise resurrect them in the UI until
+  // their own (delayed) confirmation arrives. Any incoming server snapshot
+  // is filtered through this set so a still-in-flight removal can never be
+  // un-done by a refetch that simply hasn't caught up yet.
+  const pendingRemovals = useRef<Set<string>>(new Set());
+
   function setQueue(next: SerializedItem[]) {
     queueRef.current = next;
     setQueueState(next);
+  }
+  function applyServerQueue(next: SerializedItem[]) {
+    setQueue(next.filter((item) => !pendingRemovals.current.has(item.id)));
   }
   function setBangerKeys(next: Set<string>) {
     bangerKeysRef.current = next;
@@ -93,7 +107,7 @@ export default function LiveQueueList({
         // sent — otherwise a slower, older request can resolve after a
         // faster, newer one and clobber the fresher state with stale data.
         if (!cancelled && seq === refetchSeq.current) {
-          setQueue(data.queue ?? []);
+          applyServerQueue(data.queue ?? []);
           setBangerKeys(new Set(data.bangerKeys ?? []));
           setCurrentVenueId(data.currentVenueId ?? null);
         }
@@ -124,21 +138,25 @@ export default function LiveQueueList({
   }, [songDatabaseId]);
 
   async function handlePlayed(item: SerializedItem) {
+    pendingRemovals.current.add(item.id);
     setPendingActionId(item.id);
     setQueue(queueRef.current.filter((i) => i.id !== item.id)); // optimistic
     try {
       await markPlayed(item.requestIds, songDatabaseIdRef.current);
     } finally {
+      pendingRemovals.current.delete(item.id);
       setPendingActionId(null);
     }
   }
 
   async function handleDelete(item: SerializedItem) {
+    pendingRemovals.current.add(item.id);
     setPendingActionId(item.id);
     setQueue(queueRef.current.filter((i) => i.id !== item.id)); // optimistic
     try {
       await deleteRequest(item.requestIds, songDatabaseIdRef.current);
     } finally {
+      pendingRemovals.current.delete(item.id);
       setPendingActionId(null);
     }
   }
