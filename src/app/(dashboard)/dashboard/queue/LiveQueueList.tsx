@@ -34,13 +34,52 @@ export default function LiveQueueList({
   venues: Venue[];
   initialVenueId: string | null;
 }) {
-  const [queue, setQueue] = useState(initialQueue);
-  const [bangerKeys, setBangerKeys] = useState(new Set(initialBangerKeys));
-  const [bangerMode, setBangerMode] = useState(false);
-  const [currentVenueId, setCurrentVenueId] = useState(initialVenueId);
-  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [queue, setQueueState] = useState(initialQueue);
+  const [bangerKeys, setBangerKeysState] = useState(new Set(initialBangerKeys));
+  const [bangerMode, setBangerModeState] = useState(false);
+  const [currentVenueId, setCurrentVenueIdState] = useState(initialVenueId);
+  const [pendingActionId, setPendingActionIdState] = useState<string | null>(null);
   const refetchSeq = useRef(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The keydown listener below is registered exactly once (empty deps) so
+  // rapid repeated presses — five Space presses in under a second — can't
+  // outrun React's render cycle and all land on the same stale snapshot of
+  // "what's on top of the queue". These refs are updated synchronously at
+  // every mutation site (not via a useEffect reacting to state, which would
+  // have the same lag problem) so the handler always reads the true latest
+  // value no matter how fast it fires.
+  const queueRef = useRef(queue);
+  const bangerKeysRef = useRef(bangerKeys);
+  const bangerModeRef = useRef(bangerMode);
+  const currentVenueIdRef = useRef(currentVenueId);
+  const pendingActionIdRef = useRef(pendingActionId);
+  // songDatabaseId is a stable prop for this component's lifetime (the
+  // page only ever mounts one LiveQueueList per active database), so this
+  // never needs to be kept in sync after the initial render.
+  const songDatabaseIdRef = useRef(songDatabaseId);
+  const bangerActivationInFlight = useRef(false);
+
+  function setQueue(next: SerializedItem[]) {
+    queueRef.current = next;
+    setQueueState(next);
+  }
+  function setBangerKeys(next: Set<string>) {
+    bangerKeysRef.current = next;
+    setBangerKeysState(next);
+  }
+  function setCurrentVenueId(next: string | null) {
+    currentVenueIdRef.current = next;
+    setCurrentVenueIdState(next);
+  }
+  function setPendingActionId(next: string | null) {
+    pendingActionIdRef.current = next;
+    setPendingActionIdState(next);
+  }
+
+  function computeDisplayedQueue(q: SerializedItem[], mode: boolean, keys: Set<string>) {
+    return mode ? q.filter((item) => item.tipAmountCents > 0 || keys.has(bangerKey(item.songName, item.artistName))) : q;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -86,9 +125,9 @@ export default function LiveQueueList({
 
   async function handlePlayed(item: SerializedItem) {
     setPendingActionId(item.id);
-    setQueue((q) => q.filter((i) => i.id !== item.id)); // optimistic
+    setQueue(queueRef.current.filter((i) => i.id !== item.id)); // optimistic
     try {
-      await markPlayed(item.requestIds, songDatabaseId);
+      await markPlayed(item.requestIds, songDatabaseIdRef.current);
     } finally {
       setPendingActionId(null);
     }
@@ -96,9 +135,9 @@ export default function LiveQueueList({
 
   async function handleDelete(item: SerializedItem) {
     setPendingActionId(item.id);
-    setQueue((q) => q.filter((i) => i.id !== item.id)); // optimistic
+    setQueue(queueRef.current.filter((i) => i.id !== item.id)); // optimistic
     try {
-      await deleteRequest(item.requestIds, songDatabaseId);
+      await deleteRequest(item.requestIds, songDatabaseIdRef.current);
     } finally {
       setPendingActionId(null);
     }
@@ -111,33 +150,41 @@ export default function LiveQueueList({
   // always signals "pay attention" regardless of what it's for). A plain,
   // untipped, non-banger request stays genuinely queued underneath, just
   // hidden from this view until Banger Mode is switched off again.
-  const displayedQueue = bangerMode
-    ? queue.filter((item) => item.tipAmountCents > 0 || bangerKeys.has(bangerKey(item.songName, item.artistName)))
-    : queue;
+  const displayedQueue = computeDisplayedQueue(queue, bangerMode, bangerKeys);
 
   // Laptop workflow: cycling through the live queue at a gig, hands on the
   // keyboard — Space or Enter marks the top (next-up) request played
-  // without reaching for the mouse, and B toggles Banger Mode.
+  // without reaching for the mouse, and B toggles Banger Mode. Registered
+  // exactly once (see the refs above for why) rather than depending on
+  // queue/pendingActionId/etc.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.toLowerCase() === "b") {
         e.preventDefault();
-        setBangerMode((on) => {
-          const next = !on;
-          if (next) void activateBangerMode(songDatabaseId, currentVenueId);
-          return next;
-        });
+        const next = !bangerModeRef.current;
+        setBangerModeState(next);
+        bangerModeRef.current = next;
+        // Guard against a second overlapping activation if B is pressed
+        // again (e.g. impatience) before the first one has finished —
+        // activateBangerMode is now fast, but this closes the race
+        // entirely rather than just narrowing its window.
+        if (next && !bangerActivationInFlight.current) {
+          bangerActivationInFlight.current = true;
+          void activateBangerMode(songDatabaseIdRef.current, currentVenueIdRef.current).finally(() => {
+            bangerActivationInFlight.current = false;
+          });
+        }
         return;
       }
       if (e.code !== "Space" && e.key !== "Enter") return;
       e.preventDefault();
-      const top = displayedQueue[0];
-      if (top && pendingActionId !== top.id) handlePlayed(top);
+      const top = computeDisplayedQueue(queueRef.current, bangerModeRef.current, bangerKeysRef.current)[0];
+      if (top && pendingActionIdRef.current !== top.id) handlePlayed(top);
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [displayedQueue, pendingActionId, songDatabaseId, currentVenueId]);
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">

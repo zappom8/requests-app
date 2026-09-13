@@ -20,36 +20,42 @@ const BANGER_ADDITION_REQUESTER_NAME = "Banger Mode";
 // getPublicQueue's filter in src/lib/queue.ts). A banger not in this
 // database's own catalog is silently skipped, same as a pairing target
 // that isn't catalogued — nothing to point a songId at.
+//
+// Batched into a handful of round trips rather than looping per banger
+// (findFirst + findFirst + create each) — that version took seconds for
+// even a modest list, long enough that the broadcast at the end fired well
+// after the DJ had already given up and refreshed the page, or pressed B
+// again, launching a second overlapping pass that could double-queue
+// songs the first pass hadn't committed yet.
 export async function activateBangerMode(songDatabaseId: string, venueId: string | null) {
   if (!venueId) return;
 
-  const bangers = await prisma.bangerSong.findMany({ where: { venueId } });
+  const [bangers, catalogSongs, queuedRequests] = await Promise.all([
+    prisma.bangerSong.findMany({ where: { venueId } }),
+    prisma.song.findMany({ where: { songDatabaseId } }),
+    prisma.request.findMany({ where: { songDatabaseId, status: "QUEUED" }, select: { songId: true } }),
+  ]);
   if (bangers.length === 0) return;
 
-  for (const banger of bangers) {
-    const song = await prisma.song.findFirst({
-      where: { songDatabaseId, name: banger.songName, artist: banger.artistName },
-    });
-    if (!song) continue;
+  const catalogByKey = new Map(catalogSongs.map((s) => [`${s.name}::${s.artist}`, s]));
+  const queuedSongIds = new Set(queuedRequests.map((r) => r.songId).filter((id): id is string => id !== null));
 
-    const alreadyQueued = await prisma.request.findFirst({
-      where: { songDatabaseId, songId: song.id, status: "QUEUED" },
-      select: { id: true },
-    });
-    if (alreadyQueued) continue;
+  const toCreate = bangers
+    .map((b) => catalogByKey.get(`${b.songName}::${b.artistName}`))
+    .filter((song): song is (typeof catalogSongs)[number] => !!song && !queuedSongIds.has(song.id));
+  if (toCreate.length === 0) return;
 
-    await prisma.request.create({
-      data: {
-        songDatabaseId,
-        songId: song.id,
-        songName: song.name,
-        artistName: song.artist,
-        decade: song.decade,
-        requesterName: BANGER_ADDITION_REQUESTER_NAME,
-        isBangerAddition: true,
-      },
-    });
-  }
+  await prisma.request.createMany({
+    data: toCreate.map((song) => ({
+      songDatabaseId,
+      songId: song.id,
+      songName: song.name,
+      artistName: song.artist,
+      decade: song.decade,
+      requesterName: BANGER_ADDITION_REQUESTER_NAME,
+      isBangerAddition: true,
+    })),
+  });
 
   revalidatePath("/dashboard/queue");
   await broadcastQueueChanged(songDatabaseId);
