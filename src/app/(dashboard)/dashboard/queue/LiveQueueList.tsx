@@ -5,6 +5,7 @@ import type { AdminQueueItem } from "@/lib/queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { markPlayed, deleteRequest } from "@/actions/queue";
 import { setCurrentVenue } from "@/actions/venues";
+import { activateBangerMode } from "@/actions/bangers";
 import { bangerKey } from "@/lib/bangerKey";
 
 type SerializedItem = Omit<AdminQueueItem, "requestedAt"> & { requestedAt: string };
@@ -103,18 +104,15 @@ export default function LiveQueueList({
     }
   }
 
-  // Banger Mode is a pure view filter over the same queue — it never
-  // changes what the audience can request or what actually gets queued.
-  // Surfaces the moments worth spotlighting: any tipped request (money
-  // always signals "pay attention"), plus shout-outs specifically for a
-  // song on the Bangers list (a shout-out alone doesn't need the callout,
-  // but paired with a hype song it's a moment worth building up to).
+  // Banger Mode: turning it on stages every song on the current venue's
+  // Bangers list as a real queue entry (see activateBangerMode — excluded
+  // from Statistics and never shown on the public /queue page), then this
+  // view narrows down to those plus any tipped request (any song — a tip
+  // always signals "pay attention" regardless of what it's for). A plain,
+  // untipped, non-banger request stays genuinely queued underneath, just
+  // hidden from this view until Banger Mode is switched off again.
   const displayedQueue = bangerMode
-    ? queue.filter(
-        (item) =>
-          item.tipAmountCents > 0 ||
-          (item.shoutOutRequesterNames.length > 0 && bangerKeys.has(bangerKey(item.songName, item.artistName)))
-      )
+    ? queue.filter((item) => item.tipAmountCents > 0 || bangerKeys.has(bangerKey(item.songName, item.artistName)))
     : queue;
 
   // Laptop workflow: cycling through the live queue at a gig, hands on the
@@ -125,7 +123,11 @@ export default function LiveQueueList({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.toLowerCase() === "b") {
         e.preventDefault();
-        setBangerMode((on) => !on);
+        setBangerMode((on) => {
+          const next = !on;
+          if (next) void activateBangerMode(songDatabaseId, currentVenueId);
+          return next;
+        });
         return;
       }
       if (e.code !== "Space" && e.key !== "Enter") return;
@@ -135,7 +137,7 @@ export default function LiveQueueList({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [displayedQueue, pendingActionId]);
+  }, [displayedQueue, pendingActionId, songDatabaseId, currentVenueId]);
 
   return (
     <div className="flex flex-col gap-4">

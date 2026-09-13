@@ -12,6 +12,7 @@ type GroupedRequest = {
   requestedAt: Date;
   isFiller: boolean;
   isPairedAddition: boolean;
+  isBangerAddition: boolean;
   triggeredByRequestId: string | null;
   linkedSongs: LinkedSong[];
 };
@@ -53,6 +54,7 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
       paymentStatus: true,
       requestedAt: true,
       isPairedAddition: true,
+      isBangerAddition: true,
       triggeredByRequestId: true,
     },
   });
@@ -67,15 +69,17 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
 
   const items: GroupedRequest[] = Array.from(groups.values()).map((group) => {
     // A real request landing on a song that's already queued as a pure
-    // auto-paired addition merges into this same group (same songId) — but
-    // the auto-added row was never a real ask, so once real demand exists
-    // it must never count toward "how many people want this" or backdate
-    // the request to whenever the pairing fired, or it silently jumps the
-    // queue ahead of songs only one real person asked for. Every stat below
-    // is computed from real members when there are any; the auto-added
-    // row's id still rides along in requestIds so resolving the real
-    // request also resolves it, just with zero influence on ordering.
-    const realMembers = group.filter((r) => !r.isPairedAddition);
+    // auto-added row (paired, or a Banger Mode addition) merges into this
+    // same group (same songId) — but the auto-added row was never a real
+    // ask, so once real demand exists it must never count toward "how many
+    // people want this" or backdate the request to whenever it was auto-
+    // added, or it silently jumps the queue ahead of songs only one real
+    // person asked for. Every stat below is computed from real members
+    // when there are any; the auto-added row's id still rides along in
+    // requestIds so resolving the real request also resolves it, just with
+    // zero influence on ordering.
+    const isAutoAdded = (r: (typeof group)[number]) => r.isPairedAddition || r.isBangerAddition;
+    const realMembers = group.filter((r) => !isAutoAdded(r));
     const statsGroup = realMembers.length > 0 ? realMembers : group;
 
     // Highest tip first, then earliest request — this member becomes the
@@ -104,7 +108,16 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
       paymentStatus: primary.paymentStatus,
       requestedAt: earliestRequestedAt,
       isFiller: statsGroup.every((r) => isFillerName(r.requesterName)),
-      isPairedAddition: realMembers.length === 0,
+      // Only true when EVERY member is a paired addition — a group with
+      // even one Banger Mode row mixed in (no real, no pairing) should
+      // stand as its own card, not fold under a pairing trigger that isn't
+      // really what put it here (see isBangerAddition below instead).
+      isPairedAddition: group.every((r) => r.isPairedAddition),
+      // True whenever nothing real triggered this song being queued and at
+      // least one member came from Banger Mode — used to hide it from the
+      // public queue (see getPublicQueue) without touching the pairing
+      // fold/drop logic above.
+      isBangerAddition: realMembers.length === 0 && group.some((r) => r.isBangerAddition),
       // Representative only — real (non-paired) groups never read this, and
       // a paired group is a single SongPairing target, so its members (if
       // ever more than one, e.g. a rare create race) all point at the same trigger.
@@ -158,14 +171,18 @@ export type PublicQueueItem = {
 // people requested a song too, even though it's grouped/boosted the same
 // way the admin queue is — showing that number would invite people to spam
 // requests for a song just to watch (and inflate) the count. Linked/paired
-// songs are internal queue-management detail, also omitted here.
+// songs are internal queue-management detail, also omitted here. Pure
+// Banger Mode additions are excluded entirely — they're staged for the DJ,
+// not something the audience requested or should see queued.
 export async function getPublicQueue(songDatabaseId: string): Promise<PublicQueueItem[]> {
   const groups = await getGroupedQueue(songDatabaseId);
-  return groups.map((g) => ({
-    id: g.requestIds[0],
-    songName: g.songName,
-    artistName: g.artistName,
-  }));
+  return groups
+    .filter((g) => !g.isBangerAddition)
+    .map((g) => ({
+      id: g.requestIds[0],
+      songName: g.songName,
+      artistName: g.artistName,
+    }));
 }
 
 export type AdminQueueItem = {

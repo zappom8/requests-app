@@ -36,10 +36,11 @@ function dowFilter(daysOfWeek: number[] | undefined) {
   return Prisma.sql`AND EXTRACT(DOW FROM ${localRequestedAt})::int IN (${Prisma.join(daysOfWeek)})`;
 }
 
-// Auto-added via a SongPairing rule (see src/actions/requests.ts), not a
-// real request — appended to every query below so these never inflate
-// "most requested" or any other Statistics figure, regardless of status.
-const NOT_PAIRED_ADDITION = Prisma.sql`AND "isPairedAddition" = false`;
+// Auto-added — either via a SongPairing rule (src/actions/requests.ts) or
+// Banger Mode (src/actions/bangers.ts activateBangerMode) — not a real
+// request, appended to every query below so these never inflate "most
+// requested" or any other Statistics figure, regardless of status.
+const NOT_PAIRED_ADDITION = Prisma.sql`AND "isPairedAddition" = false AND "isBangerAddition" = false`;
 
 export type Overview = {
   totalRequests: number;
@@ -151,7 +152,7 @@ export async function getMostRequestedDatabases({ from, to, daysOfWeek }: DateRa
     SELECT sd.name AS label, COUNT(*) AS value
     FROM "Request" r
     JOIN "SongDatabase" sd ON sd.id = r."songDatabaseId"
-    WHERE r."requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} AND r."isPairedAddition" = false
+    WHERE r."requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} AND r."isPairedAddition" = false AND r."isBangerAddition" = false
     GROUP BY sd.name
     ORDER BY value DESC
   `);

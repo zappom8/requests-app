@@ -178,6 +178,16 @@ model Request {
   triggeredByRequest   Request?  @relation("PairingTrigger", fields: [triggeredByRequestId], references: [id], onDelete: Cascade)
   triggeredPairings    Request[] @relation("PairingTrigger")
 
+  // Auto-added when Banger Mode is switched on (see LiveQueueList's B
+  // shortcut / src/actions/bangers.ts activateBangerMode) — a real queue
+  // entry with normal PLAY/DELETE, but not a real audience request, so
+  // it's excluded from Statistics/the recently-played prompt exactly like
+  // isPairedAddition, and never shown on the public /queue page (see
+  // getPublicQueue's filter in src/lib/queue.ts). Unlike isPairedAddition
+  // it isn't folded under any trigger — it stands as its own card, since
+  // there's no single "request" that caused it.
+  isBangerAddition Boolean @default(false)
+
   tipAmountCents        Int           @default(0)
   // Legacy Stripe-era payments — historical/audit only, no code path writes
   // these going forward. Kept alongside the Square fields rather than
