@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   createSongPairingGroup,
   addSongToGroup,
@@ -12,6 +12,11 @@ import {
 type SongOption = { name: string; artist: string };
 type GroupMember = { id: string; songName: string; artistName: string };
 type Group = { groupId: string; members: GroupMember[] };
+
+function matchesSong(m: GroupMember, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return m.songName.toLowerCase().includes(q) || m.artistName.toLowerCase().includes(q);
+}
 
 function NewGroupForm({ songs }: { songs: SongOption[] }) {
   const [building, setBuilding] = useState<SongRef[]>([]);
@@ -93,7 +98,7 @@ function NewGroupForm({ songs }: { songs: SongOption[] }) {
   );
 }
 
-function GroupCard({ group, songs }: { group: Group; songs: SongOption[] }) {
+function GroupCard({ group, songs, query }: { group: Group; songs: SongOption[]; query: string }) {
   const [picked, setPicked] = useState("");
   const availableSongs = songs.filter(
     (s) => !group.members.some((m) => m.songName === s.name && m.artistName === s.artist)
@@ -103,22 +108,28 @@ function GroupCard({ group, songs }: { group: Group; songs: SongOption[] }) {
   return (
     <li className="rounded-lg border border-border bg-surface p-4 space-y-3">
       <div className="flex flex-wrap gap-2">
-        {group.members.map((m) => (
-          <span key={m.id} className="flex items-center gap-1.5 rounded-full bg-accent/20 px-3 py-1 text-xs font-medium">
-            {m.songName} — {m.artistName}
-            <form
-              action={async (formData) => {
-                await removeSongFromGroup(formData);
-              }}
+        {group.members.map((m) => {
+          const isMatch = query !== "" && matchesSong(m, query);
+          return (
+            <span
+              key={m.id}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${isMatch ? "bg-accent text-accent-foreground" : "bg-accent/20"}`}
             >
-              <input type="hidden" name="id" value={m.id} />
-              <input type="hidden" name="groupId" value={group.groupId} />
-              <button type="submit" className="text-foreground-muted hover:text-danger" aria-label={`Remove ${m.songName}`}>
-                ×
-              </button>
-            </form>
-          </span>
-        ))}
+              {m.songName} — {m.artistName}
+              <form
+                action={async (formData) => {
+                  await removeSongFromGroup(formData);
+                }}
+              >
+                <input type="hidden" name="id" value={m.id} />
+                <input type="hidden" name="groupId" value={group.groupId} />
+                <button type="submit" className="text-foreground-muted hover:text-danger" aria-label={`Remove ${m.songName}`}>
+                  ×
+                </button>
+              </form>
+            </span>
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-2">
@@ -165,16 +176,40 @@ function GroupCard({ group, songs }: { group: Group; songs: SongOption[] }) {
 }
 
 export default function SongPairingsManager({ songs, groups }: { songs: SongOption[]; groups: Group[] }) {
+  const [query, setQuery] = useState("");
+
+  const filteredGroups = useMemo(() => {
+    if (query.trim() === "") return groups;
+    return groups.filter((g) => g.members.some((m) => matchesSong(m, query)));
+  }, [groups, query]);
+
   return (
     <div className="space-y-4">
+      <div className="space-y-1">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search a pairing or a linked song…"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        {query.trim() !== "" && (
+          <p className="text-xs text-foreground-muted">
+            {filteredGroups.length} group{filteredGroups.length === 1 ? "" : "s"} match
+          </p>
+        )}
+      </div>
+
       <NewGroupForm songs={songs} />
 
       {groups.length === 0 ? (
         <p className="text-sm text-foreground-muted">No pairing groups yet — create one above.</p>
+      ) : filteredGroups.length === 0 ? (
+        <p className="text-sm text-foreground-muted">No pairing or linked song matches &quot;{query}&quot;.</p>
       ) : (
         <ul className="space-y-3">
-          {groups.map((g) => (
-            <GroupCard key={g.groupId} group={g} songs={songs} />
+          {filteredGroups.map((g) => (
+            <GroupCard key={g.groupId} group={g} songs={songs} query={query} />
           ))}
         </ul>
       )}
