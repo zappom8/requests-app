@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import DatabaseRow from "./DatabaseRow";
 import CreateDatabaseForm from "./CreateDatabaseForm";
+import AddSongToDatabasesForm from "./AddSongToDatabasesForm";
 
 // Admin-facing, always needs current DB state — never statically cached.
 export const dynamic = "force-dynamic";
@@ -37,6 +38,8 @@ export default async function DatabasesPage() {
           />
         ))}
       </ul>
+
+      <AddSongToDatabasesForm databases={databases.map((db) => ({ id: db.id, name: db.name }))} />
 
       <CreateDatabaseForm />
     </div>

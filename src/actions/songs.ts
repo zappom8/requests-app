@@ -18,6 +18,30 @@ export async function createSong(formData: FormData) {
   revalidatePath(`/dashboard/databases/${songDatabaseId}`);
 }
 
+// Adds one song to several databases at once — from the Song Databases
+// list page, not any single database's own page — so a song that belongs
+// on multiple set lists (e.g. a "Guitar" list and an "All Songs"
+// superset) doesn't need re-entering once per database. Each database
+// still gets its own separate Song row (same reasoning as everywhere else
+// a song is duplicated per database: CSV replace, decade edits, etc. are
+// all per-database), createMany just does all the inserts in one query.
+export async function createSongInDatabases(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const artist = String(formData.get("artist") ?? "").trim();
+  const decade = String(formData.get("decade") ?? "").trim() || null;
+  const songDatabaseIds = formData.getAll("songDatabaseIds").map(String).filter(Boolean);
+
+  if (!name || !artist) throw new Error("Song name and artist are required");
+  if (songDatabaseIds.length === 0) throw new Error("Choose at least one database");
+
+  await prisma.song.createMany({
+    data: songDatabaseIds.map((songDatabaseId) => ({ songDatabaseId, name, artist, decade })),
+  });
+
+  revalidatePath("/dashboard/databases");
+  for (const id of songDatabaseIds) revalidatePath(`/dashboard/databases/${id}`);
+}
+
 export async function updateSong(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
