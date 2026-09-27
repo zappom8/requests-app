@@ -61,7 +61,14 @@ export default function MidiTestPage() {
   }
 
   function refreshFromAccess(access: MIDIAccess) {
-    const list = Array.from(access.outputs.values()).map((o) => ({ id: o.id, name: o.name ?? "Unnamed output" }));
+    // Web MIDI Browser's polyfill implements outputs/inputs with a
+    // hand-rolled .next()-based iterator that has no Symbol.iterator, so
+    // Array.from(access.outputs.values()) silently returns [] on it even
+    // when real ports exist — real browsers don't have this gap, but
+    // .forEach() (which the polyfill does implement, and which is also
+    // part of the real MIDIOutputMap spec) works correctly on both.
+    const list: { id: string; name: string }[] = [];
+    access.outputs.forEach((o) => list.push({ id: o.id, name: o.name ?? "Unnamed output" }));
     setOutputs(list);
     setStatus(`${list.length} output(s) found${list.length ? ": " + list.map((o) => o.name).join(", ") : ""}`);
     setSelectedOutputId((current) => current ?? list[0]?.id ?? null);
