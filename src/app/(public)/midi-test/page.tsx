@@ -12,6 +12,28 @@ import { useEffect, useRef, useState } from "react";
 
 type LogEntry = { time: string; text: string };
 
+// Web MIDI Browser's bridge (and this is true of every WKWebView-based
+// Web MIDI shim, not just this one app) works by injecting a JS polyfill
+// that calls window.webkit.messageHandlers.<name>.postMessage(...) to talk
+// to native code — there's no such thing on a real Web MIDI browser
+// (Chrome etc.), where navigator.requestMIDIAccess is a true built-in.
+// Checking for window.webkit directly tells us whether that bridge is
+// even present on this exact page load, before worrying about whether any
+// MIDI ports show up through it.
+function getBridgeDiagnostics(): string[] {
+  const w = window as unknown as { webkit?: { messageHandlers?: Record<string, unknown> } };
+  const lines: string[] = [];
+  lines.push(`navigator.requestMIDIAccess: ${typeof navigator.requestMIDIAccess}`);
+  lines.push(`window.webkit: ${typeof w.webkit}`);
+  lines.push(`window.webkit.messageHandlers: ${typeof w.webkit?.messageHandlers}`);
+  if (w.webkit?.messageHandlers) {
+    lines.push(`  .onready: ${typeof w.webkit.messageHandlers.onready}`);
+    lines.push(`  .send: ${typeof w.webkit.messageHandlers.send}`);
+    lines.push(`  .clear: ${typeof w.webkit.messageHandlers.clear}`);
+  }
+  return lines;
+}
+
 function describe(data: Uint8Array): string {
   const status = data[0];
   const type = status & 0xf0;
@@ -30,6 +52,7 @@ export default function MidiTestPage() {
   const [channel, setChannel] = useState(1);
   const [program, setProgram] = useState(0);
   const [log, setLog] = useState<LogEntry[]>([]);
+  const [diagnostics, setDiagnostics] = useState<string[]>([]);
   const midiAccessRef = useRef<MIDIAccess | null>(null);
 
   function addLog(text: string) {
@@ -51,6 +74,7 @@ export default function MidiTestPage() {
   }
 
   async function connect() {
+    setDiagnostics(getBridgeDiagnostics());
     if (!navigator.requestMIDIAccess) {
       setStatus("navigator.requestMIDIAccess isn't available in this browser — open this page inside Web MIDI Browser, not Safari.");
       return;
@@ -115,6 +139,25 @@ export default function MidiTestPage() {
         <p className="text-sm text-foreground-muted mt-1">
           Temporary tool for testing a Web MIDI connection to MIDI Mitter / forScore.
         </p>
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <h2 className="text-sm font-medium mb-2">Bridge diagnostics</h2>
+        <p className="text-xs text-foreground-muted mb-2">
+          Whether Web MIDI Browser&apos;s native bridge is actually present on this page (appears after you tap
+          Connect below). In Safari every line here would read &quot;undefined&quot;.
+        </p>
+        {diagnostics.length === 0 ? (
+          <p className="text-xs text-foreground-muted">Tap Connect to check.</p>
+        ) : (
+          <ul className="text-xs font-mono space-y-0.5">
+            {diagnostics.map((line, i) => (
+              <li key={i} className={line.includes("undefined") ? "text-danger" : "text-success"}>
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
