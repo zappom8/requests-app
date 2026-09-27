@@ -14,7 +14,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
-const LIBRARY = "Footdrums";
+const PERFORMER_SLUG = "lochie";
 
 const PROGRAMS: [program: number, songName: string, artistName: string][] = [
   [0, "Wish You Well", "Bernard Fanning"],
@@ -137,14 +137,15 @@ const PROGRAMS: [program: number, songName: string, artistName: string][] = [
 ];
 
 async function main() {
+  const performer = await prisma.performer.findUniqueOrThrow({ where: { slug: PERFORMER_SLUG } });
   for (const [program, songName, artistName] of PROGRAMS) {
     await prisma.forScoreProgram.upsert({
-      where: { library_songName_artistName: { library: LIBRARY, songName, artistName } },
-      create: { library: LIBRARY, songName, artistName, program },
+      where: { performerId_songName_artistName: { performerId: performer.id, songName, artistName } },
+      create: { performerId: performer.id, songName, artistName, program },
       update: { program },
     });
   }
-  console.log(`Upserted ${PROGRAMS.length} ${LIBRARY} program numbers.`);
+  console.log(`Upserted ${PROGRAMS.length} program numbers for ${performer.name}.`);
 }
 
 main()

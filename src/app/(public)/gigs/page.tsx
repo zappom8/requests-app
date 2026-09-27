@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { getDefaultPerformer } from "@/lib/auth";
 import { getUpcomingGigs, type Gig } from "@/lib/gigs";
 
 export const dynamic = "force-dynamic";
@@ -85,7 +86,11 @@ function GigCard({ gig }: { gig: Gig }) {
 }
 
 export default async function GigsPage() {
-  const settings = await prisma.settings.findUnique({ where: { id: 1 }, select: { gigsCalendarUrls: true } });
+  const performer = await getDefaultPerformer();
+  const settings = await prisma.settings.findUnique({
+    where: { performerId: performer.id },
+    select: { gigsCalendarUrls: true },
+  });
   const calendarUrls = settings?.gigsCalendarUrls ?? [];
 
   const { gigs, allFailed } = calendarUrls.length > 0 ? await getUpcomingGigs(calendarUrls) : { gigs: [], allFailed: false };

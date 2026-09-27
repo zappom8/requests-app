@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentPerformer } from "@/lib/auth";
 import { getRequestHistory, countRequestHistory, type HistoryFilters } from "@/lib/history";
 import type { RequestStatus } from "@/generated/prisma/client";
 import DeleteRequestButton from "./DeleteRequestButton";
@@ -34,6 +35,7 @@ function buildQueryString(params: Record<string, string | undefined>): string {
 
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
+  const performer = await getCurrentPerformer();
 
   const filters: HistoryFilters = {
     song: sp.song,
@@ -49,33 +51,23 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const cursor = sp.cursor ?? null;
   const prevCursorsStack = sp.prevCursors ? sp.prevCursors.split(",").filter(Boolean) : [];
 
-  // Song/artist filter options come from the real catalog (the "Footdrums
-  // ALL" database), not from distinct names seen in Request history — the
-  // latter is polluted with one-off test song/artist names from testing the
-  // request flow, and wouldn't include catalog songs that haven't been
-  // requested yet.
-  const catalogDatabase = await prisma.songDatabase.findFirst({ where: { name: "Footdrums ALL" }, select: { id: true } });
+  // Song/artist filter options come from the real catalog (every song in
+  // this performer's databases), not from distinct names seen in Request
+  // history — the latter is polluted with one-off test song/artist names
+  // from testing the request flow, and wouldn't include catalog songs that
+  // haven't been requested yet.
+  const ownSongs = { songDatabase: { performerId: performer.id } };
 
   const [{ items, nextCursor }, databases, filteredCount, songRows, artistRows] = await Promise.all([
-    getRequestHistory(filters, cursor),
-    prisma.songDatabase.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    countRequestHistory(filters),
-    catalogDatabase
-      ? prisma.song.findMany({
-          where: { songDatabaseId: catalogDatabase.id },
-          distinct: ["name"],
-          select: { name: true },
-          orderBy: { name: "asc" },
-        })
-      : Promise.resolve([]),
-    catalogDatabase
-      ? prisma.song.findMany({
-          where: { songDatabaseId: catalogDatabase.id },
-          distinct: ["artist"],
-          select: { artist: true },
-          orderBy: { artist: "asc" },
-        })
-      : Promise.resolve([]),
+    getRequestHistory(filters, performer.id, cursor),
+    prisma.songDatabase.findMany({
+      where: { performerId: performer.id },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    countRequestHistory(filters, performer.id),
+    prisma.song.findMany({ where: ownSongs, distinct: ["name"], select: { name: true }, orderBy: { name: "asc" } }),
+    prisma.song.findMany({ where: ownSongs, distinct: ["artist"], select: { artist: true }, orderBy: { artist: "asc" } }),
   ]);
   const songNames = songRows.map((r) => r.name);
   const artistNames = artistRows.map((r) => r.artist);

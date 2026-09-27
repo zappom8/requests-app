@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { parseSongsCsv } from "@/lib/csv";
+import { assertOwnsDatabase, requirePerformer } from "@/lib/auth";
 
 // Next.js redacts thrown Server Action errors to a generic digest in
 // production builds (dev shows the real message) — e.g. deleteSongDatabase
@@ -15,6 +16,7 @@ export async function createSongDatabase(formData: FormData): Promise<ActionResu
   try {
     const name = String(formData.get("name") ?? "").trim();
     if (!name) throw new Error("Database name is required");
+    const performer = await requirePerformer();
 
     const file = formData.get("file") as File | null;
     if (file && file.size > 0) {
@@ -22,12 +24,13 @@ export async function createSongDatabase(formData: FormData): Promise<ActionResu
       if (songs.length === 0) throw new Error("No valid rows found in that CSV.");
       await prisma.songDatabase.create({
         data: {
+          performerId: performer.id,
           name,
           songs: { create: songs.map((s) => ({ name: s.name, artist: s.artist, decade: s.decade })) },
         },
       });
     } else {
-      await prisma.songDatabase.create({ data: { name } });
+      await prisma.songDatabase.create({ data: { performerId: performer.id, name } });
     }
 
     revalidatePath("/dashboard/databases");
@@ -41,11 +44,13 @@ export async function setActiveDatabase(formData: FormData): Promise<ActionResul
   try {
     const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
     if (!songDatabaseId) throw new Error("songDatabaseId is required");
+    const performer = await requirePerformer();
+    await assertOwnsDatabase(performer.id, songDatabaseId);
 
     await prisma.settings.upsert({
-      where: { id: 1 },
+      where: { performerId: performer.id },
       update: { activeSongDatabaseId: songDatabaseId },
-      create: { id: 1, activeSongDatabaseId: songDatabaseId },
+      create: { performerId: performer.id, activeSongDatabaseId: songDatabaseId },
     });
     revalidatePath("/dashboard/databases");
     revalidatePath("/request");
@@ -60,8 +65,9 @@ export async function renameSongDatabase(formData: FormData): Promise<ActionResu
     const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
     const name = String(formData.get("name") ?? "").trim();
     if (!songDatabaseId || !name) throw new Error("songDatabaseId and name are required");
+    const performer = await requirePerformer();
 
-    await prisma.songDatabase.update({ where: { id: songDatabaseId }, data: { name } });
+    await prisma.songDatabase.updateMany({ where: { id: songDatabaseId, performerId: performer.id }, data: { name } });
     revalidatePath("/dashboard/databases");
     return { success: true };
   } catch (e) {
@@ -74,14 +80,16 @@ export async function duplicateSongDatabase(formData: FormData): Promise<ActionR
     const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
     if (!songDatabaseId) throw new Error("songDatabaseId is required");
 
-    const source = await prisma.songDatabase.findUnique({
-      where: { id: songDatabaseId },
+    const performer = await requirePerformer();
+    const source = await prisma.songDatabase.findFirst({
+      where: { id: songDatabaseId, performerId: performer.id },
       include: { songs: true },
     });
     if (!source) throw new Error("Database not found");
 
     await prisma.songDatabase.create({
       data: {
+        performerId: performer.id,
         name: `${source.name} (copy)`,
         songs: {
           create: source.songs.map((song) => ({
@@ -108,9 +116,11 @@ export async function deleteSongDatabase(formData: FormData): Promise<ActionResu
   try {
     const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
     if (!songDatabaseId) throw new Error("songDatabaseId is required");
+    const performer = await requirePerformer();
+    await assertOwnsDatabase(performer.id, songDatabaseId);
 
     const [settings, requestCount] = await Promise.all([
-      prisma.settings.findUnique({ where: { id: 1 } }),
+      prisma.settings.findUnique({ where: { performerId: performer.id } }),
       prisma.request.count({ where: { songDatabaseId } }),
     ]);
 

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { parseSongsCsv } from "@/lib/csv";
+import { assertOwnsDatabase, assertOwnsDatabases, requirePerformer } from "@/lib/auth";
 
 export async function createSong(formData: FormData) {
   const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
@@ -13,6 +14,8 @@ export async function createSong(formData: FormData) {
   if (!songDatabaseId || !name || !artist) {
     throw new Error("songDatabaseId, name, and artist are required");
   }
+  const performer = await requirePerformer();
+  await assertOwnsDatabase(performer.id, songDatabaseId);
 
   await prisma.song.create({ data: { songDatabaseId, name, artist, decade } });
   revalidatePath(`/dashboard/databases/${songDatabaseId}`);
@@ -33,6 +36,8 @@ export async function createSongInDatabases(formData: FormData) {
 
   if (!name || !artist) throw new Error("Song name and artist are required");
   if (songDatabaseIds.length === 0) throw new Error("Choose at least one database");
+  const performer = await requirePerformer();
+  await assertOwnsDatabases(performer.id, songDatabaseIds);
 
   await prisma.song.createMany({
     data: songDatabaseIds.map((songDatabaseId) => ({ songDatabaseId, name, artist, decade })),
@@ -50,8 +55,12 @@ export async function updateSong(formData: FormData) {
   const decade = String(formData.get("decade") ?? "").trim() || null;
 
   if (!id || !name || !artist) throw new Error("name and artist are required");
+  const performer = await requirePerformer();
 
-  await prisma.song.update({ where: { id }, data: { name, artist, decade } });
+  await prisma.song.updateMany({
+    where: { id, songDatabase: { performerId: performer.id } },
+    data: { name, artist, decade },
+  });
   revalidatePath(`/dashboard/databases/${songDatabaseId}`);
 }
 
@@ -59,8 +68,9 @@ export async function deleteSong(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
   if (!id) throw new Error("id is required");
+  const performer = await requirePerformer();
 
-  await prisma.song.delete({ where: { id } });
+  await prisma.song.deleteMany({ where: { id, songDatabase: { performerId: performer.id } } });
   revalidatePath(`/dashboard/databases/${songDatabaseId}`);
 }
 
@@ -70,6 +80,8 @@ export async function importSongsCsv(formData: FormData) {
   const songDatabaseId = String(formData.get("songDatabaseId") ?? "");
   const file = formData.get("file") as File | null;
   if (!songDatabaseId || !file) throw new Error("songDatabaseId and file are required");
+  const performer = await requirePerformer();
+  await assertOwnsDatabase(performer.id, songDatabaseId);
 
   const text = await file.text();
   const songs = parseSongsCsv(text);

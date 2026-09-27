@@ -34,8 +34,9 @@ export type PaymentTotals = {
   count: number;
 };
 
-function buildWhere(filters: PaymentFilters): Prisma.RequestWhereInput {
+function buildWhere(filters: PaymentFilters, performerId: string): Prisma.RequestWhereInput {
   const where: Prisma.RequestWhereInput = {
+    songDatabase: { performerId },
     paymentStatus: { in: ["SUCCEEDED", "REFUNDED", "PARTIALLY_REFUNDED"] },
   };
   if (filters.dateFrom || filters.dateTo) {
@@ -47,8 +48,11 @@ function buildWhere(filters: PaymentFilters): Prisma.RequestWhereInput {
   return where;
 }
 
-export async function getPayments(filters: PaymentFilters): Promise<{ items: PaymentItem[]; totals: PaymentTotals }> {
-  const where = buildWhere(filters);
+export async function getPayments(
+  filters: PaymentFilters,
+  performerId: string
+): Promise<{ items: PaymentItem[]; totals: PaymentTotals }> {
+  const where = buildWhere(filters, performerId);
 
   const rows = await prisma.request.findMany({
     where,

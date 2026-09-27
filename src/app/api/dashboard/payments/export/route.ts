@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPayments } from "@/lib/payments";
 import Papa from "papaparse";
+import { getSignedInPerformer } from "@/lib/auth";
 
-// Auth enforced by src/proxy.ts (matches /api/dashboard/:path*).
+// Signed-out requests are rejected by src/proxy.ts; scoped to the caller's performer below.
 export async function GET(request: NextRequest) {
+  const performer = await getSignedInPerformer();
+  if (!performer) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const dateFrom = request.nextUrl.searchParams.get("dateFrom") ?? undefined;
   const dateTo = request.nextUrl.searchParams.get("dateTo") ?? undefined;
 
-  const { items } = await getPayments({ dateFrom, dateTo });
+  const { items } = await getPayments({ dateFrom, dateTo }, performer.id);
 
   const csv = Papa.unparse({
     fields: ["Requester", "Song", "Artist", "Gross", "Fee", "Net", "Refunded", "Status", "Provider", "Payment ID", "Date"],

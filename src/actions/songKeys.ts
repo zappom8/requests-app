@@ -2,10 +2,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requirePerformer } from "@/lib/auth";
 
 // Saved per-field (one input's onBlur at a time) rather than the whole row
 // at once, so filling in a table of songs saves as you go without a submit
-// button per row. Global by song name+artist — see the SongKey model
+// button per row. Per performer, global by song name+artist — see the SongKey model
 // comment in schema.prisma for why.
 export async function setSongKey(formData: FormData) {
   const songName = String(formData.get("songName") ?? "").trim();
@@ -15,8 +16,10 @@ export async function setSongKey(formData: FormData) {
 
   if (!songName || !artistName) throw new Error("songName and artistName are required");
   if (field !== "originalKey" && field !== "lochiesKey") throw new Error("field must be originalKey or lochiesKey");
+  const performer = await requirePerformer();
+  const where = { performerId_songName_artistName: { performerId: performer.id, songName, artistName } };
 
-  const existing = await prisma.songKey.findUnique({ where: { songName_artistName: { songName, artistName } } });
+  const existing = await prisma.songKey.findUnique({ where });
   const originalKey = field === "originalKey" ? value : (existing?.originalKey ?? null);
   const lochiesKey = field === "lochiesKey" ? value : (existing?.lochiesKey ?? null);
 
@@ -28,8 +31,8 @@ export async function setSongKey(formData: FormData) {
   }
 
   await prisma.songKey.upsert({
-    where: { songName_artistName: { songName, artistName } },
-    create: { songName, artistName, originalKey, lochiesKey },
+    where,
+    create: { performerId: performer.id, songName, artistName, originalKey, lochiesKey },
     update: { originalKey, lochiesKey },
   });
 

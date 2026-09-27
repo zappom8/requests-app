@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getPublicQueue } from "@/lib/queue";
 import { getActiveSongDatabaseId } from "@/lib/settings";
+import { getDefaultPerformer } from "@/lib/auth";
 
 export async function GET() {
-  const activeSongDatabaseId = await getActiveSongDatabaseId();
+  const performer = await getDefaultPerformer();
+  const activeSongDatabaseId = await getActiveSongDatabaseId(performer.id);
   if (!activeSongDatabaseId) {
     return NextResponse.json({ queue: [] });
   }

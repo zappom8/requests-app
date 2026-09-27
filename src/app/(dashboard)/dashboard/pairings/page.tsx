@@ -1,19 +1,22 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentPerformer } from "@/lib/auth";
 import SongPairingsManager from "./SongPairingsManager";
 
 // Admin-facing, always needs current state — never statically cached.
 export const dynamic = "force-dynamic";
 
 export default async function SongPairingsPage() {
+  const performer = await getCurrentPerformer();
   const [songs, members] = await Promise.all([
     // Deduped across every database — the picker shouldn't show the same
     // song once per database it happens to be catalogued in.
     prisma.song.findMany({
+      where: { songDatabase: { performerId: performer.id } },
       distinct: ["name", "artist"],
       orderBy: { name: "asc" },
       select: { name: true, artist: true },
     }),
-    prisma.songPairingGroupMember.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.songPairingGroupMember.findMany({ where: { performerId: performer.id }, orderBy: { createdAt: "asc" } }),
   ]);
 
   const groupsById = new Map<string, typeof members>();

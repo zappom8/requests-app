@@ -1,19 +1,22 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentPerformer } from "@/lib/auth";
 import KeysManager from "./KeysManager";
 
 // Admin-facing, always needs current state — never statically cached.
 export const dynamic = "force-dynamic";
 
 export default async function KeysPage() {
+  const performer = await getCurrentPerformer();
   const [songs, keys] = await Promise.all([
     // Deduped across every database — the same physical song shouldn't
     // need its key entered once per database it happens to be catalogued in.
     prisma.song.findMany({
+      where: { songDatabase: { performerId: performer.id } },
       distinct: ["name", "artist"],
       orderBy: { name: "asc" },
       select: { name: true, artist: true },
     }),
-    prisma.songKey.findMany(),
+    prisma.songKey.findMany({ where: { performerId: performer.id } }),
   ]);
 
   const keyByName = new Map(keys.map((k) => [`${k.songName}::${k.artistName}`, k]));

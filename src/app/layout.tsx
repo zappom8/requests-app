@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { prisma } from "@/lib/prisma";
+import { getDefaultPerformer } from "@/lib/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,8 +20,11 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Site-wide branding is the default performer's until other performers
+  // have their own public pages.
+  const performer = await getDefaultPerformer();
   const settings = await prisma.settings.findUnique({
-    where: { id: 1 },
+    where: { performerId: performer.id },
     select: { brandPrimaryColor: true, brandSecondaryColor: true },
   });
 

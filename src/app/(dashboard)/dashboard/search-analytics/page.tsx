@@ -1,5 +1,6 @@
 import { resolveDateRange, DOW_LABELS } from "@/lib/statistics";
 import { getMostSearchedTerms, getMostUnsuccessfulSearches, getSearchTotals } from "@/lib/search-analytics";
+import { getCurrentPerformer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,8 @@ export default async function SearchAnalyticsPage({
 }) {
   const sp = await searchParams;
   const selectedDays = sp.days === undefined ? [] : Array.isArray(sp.days) ? sp.days : [sp.days];
-  const range = resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays);
+  const performer = await getCurrentPerformer();
+  const range = { ...resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays), performerId: performer.id };
   const limit = LIMIT_OPTIONS.includes(Number(sp.limit)) ? Number(sp.limit) : 20;
 
   const [totals, mostSearched, unsuccessful] = await Promise.all([

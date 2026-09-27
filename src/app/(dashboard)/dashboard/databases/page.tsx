@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentPerformer } from "@/lib/auth";
 import DatabaseRow from "./DatabaseRow";
 import CreateDatabaseForm from "./CreateDatabaseForm";
 import AddSongToDatabasesForm from "./AddSongToDatabasesForm";
@@ -7,12 +8,14 @@ import AddSongToDatabasesForm from "./AddSongToDatabasesForm";
 export const dynamic = "force-dynamic";
 
 export default async function DatabasesPage() {
+  const performer = await getCurrentPerformer();
   const [databases, settings] = await Promise.all([
     prisma.songDatabase.findMany({
+      where: { performerId: performer.id },
       orderBy: { createdAt: "asc" },
       include: { _count: { select: { songs: true, requests: true } } },
     }),
-    prisma.settings.findUnique({ where: { id: 1 } }),
+    prisma.settings.findUnique({ where: { performerId: performer.id } }),
   ]);
 
   const activeId = settings?.activeSongDatabaseId ?? null;

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getActiveSongDatabaseId } from "@/lib/settings";
+import { getDefaultPerformer } from "@/lib/auth";
 import RequestFlow from "./RequestFlow";
 
 // Must always reflect the current active database and its current songs —
@@ -7,7 +8,8 @@ import RequestFlow from "./RequestFlow";
 export const dynamic = "force-dynamic";
 
 export default async function RequestPage() {
-  const activeSongDatabaseId = await getActiveSongDatabaseId();
+  const performer = await getDefaultPerformer();
+  const activeSongDatabaseId = await getActiveSongDatabaseId(performer.id);
 
   if (!activeSongDatabaseId) {
     return (
@@ -28,7 +30,7 @@ export default async function RequestPage() {
       select: { id: true, name: true, artist: true, decade: true },
     }),
     prisma.settings.findUnique({
-      where: { id: 1 },
+      where: { performerId: performer.id },
       select: { defaultTipAmountsCents: true, disableRecentlyPlayedPrompt: true },
     }),
     prisma.request.findMany({

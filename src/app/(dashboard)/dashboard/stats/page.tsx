@@ -14,6 +14,7 @@ import {
   type RankedLabel,
   type RankedSong,
 } from "@/lib/statistics";
+import { getCurrentPerformer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,8 @@ export default async function StatsPage({
 }) {
   const sp = await searchParams;
   const selectedDays = sp.days === undefined ? [] : Array.isArray(sp.days) ? sp.days : [sp.days];
-  const range = resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays);
+  const performer = await getCurrentPerformer();
+  const range = { ...resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays), performerId: performer.id };
 
   const [
     overview,

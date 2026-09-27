@@ -1,11 +1,16 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentPerformer } from "@/lib/auth";
 import BookingStatusSelect from "./BookingStatusSelect";
 import LocalTime from "../../LocalTime";
 
 export const dynamic = "force-dynamic";
 
 export default async function BookingsPage() {
-  const inquiries = await prisma.bookingInquiry.findMany({ orderBy: { createdAt: "desc" } });
+  const performer = await getCurrentPerformer();
+  const inquiries = await prisma.bookingInquiry.findMany({
+    where: { performerId: performer.id },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <div className="space-y-6">

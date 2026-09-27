@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getActiveSongDatabaseId } from "@/lib/settings";
+import { getDefaultPerformer } from "@/lib/auth";
 import { getPublicQueue } from "@/lib/queue";
 import QueueList from "./QueueList";
 import PromoLinks from "../PromoLinks";
@@ -8,7 +9,8 @@ import PromoLinks from "../PromoLinks";
 export const dynamic = "force-dynamic";
 
 export default async function QueuePage() {
-  const activeSongDatabaseId = await getActiveSongDatabaseId();
+  const performer = await getDefaultPerformer();
+  const activeSongDatabaseId = await getActiveSongDatabaseId(performer.id);
   const queue = activeSongDatabaseId ? await getPublicQueue(activeSongDatabaseId) : [];
 
   return (

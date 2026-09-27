@@ -28,14 +28,42 @@ enum InquiryStatus {
   CLOSED
 }
 
+// One per person who performs with this app (Lochie, Mitchell, ...). Every
+// catalog/config table below is owned by exactly one performer, and the
+// dashboard only ever reads or writes the logged-in performer's own rows
+// (see src/lib/auth.ts). Request and SearchLog aren't owned directly — they
+// belong to a SongDatabase, which is. authUserId is the Supabase Auth user
+// id (the JWT "sub" claim); a login with no Performer row gets no dashboard
+// access at all. Linked/created via prisma/performers.ts.
+model Performer {
+  id                 String                   @id @default(cuid())
+  authUserId         String?                  @unique
+  // Public URL segment for this performer's pages (phase 2).
+  slug               String                   @unique
+  name               String
+  songDatabases      SongDatabase[]
+  venues             Venue[]
+  songPairingMembers SongPairingGroupMember[]
+  songKeys           SongKey[]
+  forScorePrograms   ForScoreProgram[]
+  bookingInquiries   BookingInquiry[]
+  settings           Settings?
+  createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                 @updatedAt @db.Timestamptz(3)
+}
+
 model SongDatabase {
-  id         String      @id @default(cuid())
-  name       String
-  songs      Song[]
-  requests   Request[]
-  searchLogs SearchLog[]
-  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+  id          String      @id @default(cuid())
+  performerId String
+  performer   Performer   @relation(fields: [performerId], references: [id])
+  name        String
+  songs       Song[]
+  requests    Request[]
+  searchLogs  SearchLog[]
+  createdAt   DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([performerId])
 }
 
 // Trigram GIN indexes on name/artist are added via a hand-written migration
@@ -65,8 +93,9 @@ model Song {
 // member as a linked song, without a real audience request existing for
 // them. Membership rows share a `groupId` (no separate parent-group table;
 // the id is just a shared grouping key generated when a group is created —
-// deleting a group means deleting every row with that id). Global by song
-// name+artist rather than scoped to one SongDatabase/Song row — the same
+// deleting a group means deleting every row with that id). Owned by one
+// performer, and within that performer global by song name+artist rather
+// than scoped to one SongDatabase/Song row — the same
 // physical song is catalogued as a separate Song row in every database
 // that includes it (e.g. a "Guitar" set list and an "All Songs" superset),
 // and a group should apply in all of them. Also means groups survive a CSV
@@ -80,15 +109,17 @@ model Song {
 // triggered it via Request.triggeredByRequestId, and flagged
 // Request.isPairedAddition so it never counts in Statistics.
 model SongPairingGroupMember {
-  id         String   @id @default(cuid())
-  groupId    String
-  songName   String
-  artistName String
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  id          String    @id @default(cuid())
+  performerId String
+  performer   Performer @relation(fields: [performerId], references: [id])
+  groupId     String
+  songName    String
+  artistName  String
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
 
   @@unique([groupId, songName, artistName])
   @@index([groupId])
-  @@index([songName, artistName])
+  @@index([performerId, songName, artistName])
 }
 
 // Different gigs call for different hype songs, so bangers are scoped per
@@ -96,11 +127,15 @@ model SongPairingGroupMember {
 // Settings.currentVenueId, and Banger Mode (toggled with the B key) reads
 // bangers for whichever venue is currently selected there.
 model Venue {
-  id        String       @id @default(cuid())
-  name      String
-  bangers   BangerSong[]
-  createdAt DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+  id          String       @id @default(cuid())
+  performerId String
+  performer   Performer    @relation(fields: [performerId], references: [id])
+  name        String
+  bangers     BangerSong[]
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([performerId])
 }
 
 // A DJ-curated "hype" list, scoped to one Venue. Purely a dashboard lens:
@@ -122,8 +157,9 @@ model BangerSong {
 }
 
 // The recording's key, and the key Lochie actually performs it in when
-// they differ (e.g. transposed down for his vocal range). Global by song
-// name+artist rather than a column on Song — same reasoning as
+// they differ (e.g. transposed down for his vocal range). Per performer,
+// and within that performer global by song name+artist rather than a
+// column on Song — same reasoning as
 // SongPairingGroupMember/BangerSong: a song's key doesn't depend on which
 // database's set list it's catalogued in, so filling it in once should
 // apply everywhere that song appears, and it survives a CSV replace
@@ -133,33 +169,35 @@ model BangerSong {
 // further on the night depending on how his voice is doing, and a pairing
 // shouldn't silently break over that.
 model SongKey {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
+  performerId String
+  performer   Performer @relation(fields: [performerId], references: [id])
   songName    String
   artistName  String
   originalKey String?
   lochiesKey  String?
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
 
-  @@unique([songName, artistName])
+  @@unique([performerId, songName, artistName])
 }
 
 // The MIDI Program Change that opens this song's score in a forScore
 // library: each score there has a MIDI "Open" command of Program Change
 // <program> on channel 1 (forScore stores it as raw hex, e.g. "C0 32" =
-// program 50), so sending that message opens the chart. Global by song
-// name+artist, same reasoning as SongKey, but scoped per forScore
-// `library` since each player's iPad library is numbered independently
-// (e.g. Lochie's "Footdrums" vs a second player's own set list).
+// program 50), so sending that message opens the chart. Per performer
+// (each player's iPad library is numbered independently), and within that
+// performer global by song name+artist, same reasoning as SongKey.
 model ForScoreProgram {
-  id         String   @id @default(cuid())
-  library    String
-  songName   String
-  artistName String
-  program    Int
-  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+  id          String    @id @default(cuid())
+  performerId String
+  performer   Performer @relation(fields: [performerId], references: [id])
+  songName    String
+  artistName  String
+  program     Int
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
 
-  @@unique([library, songName, artistName])
-  @@unique([library, program])
+  @@unique([performerId, songName, artistName])
+  @@unique([performerId, program])
 }
 
 // The partial index that keeps Live Queue reads fast regardless of history
@@ -192,7 +230,7 @@ model Request {
   // regardless of status, since nobody actually requested it. Resolves
   // (PLAYED/DELETED) in lockstep with triggeredByRequest: the Live Queue
   // only ever acts on the pair as a unit, never on this row alone.
-  isPairedAddition    Boolean   @default(false)
+  isPairedAddition     Boolean   @default(false)
   triggeredByRequestId String?
   triggeredByRequest   Request?  @relation("PairingTrigger", fields: [triggeredByRequestId], references: [id], onDelete: Cascade)
   triggeredPairings    Request[] @relation("PairingTrigger")
@@ -246,51 +284,56 @@ model SearchLog {
 }
 
 model Settings {
-  id                     Int      @id @default(1) // singleton row, app enforces id=1
-  activeSongDatabaseId   String?
+  id                          Int       @id @default(autoincrement())
+  // One row per performer (Lochie's is the original id=1 singleton).
+  performerId                 String    @unique
+  performer                   Performer @relation(fields: [performerId], references: [id])
+  activeSongDatabaseId        String?
   // Which Venue's Bangers list Banger Mode reads on the Live Queue — plain
   // string, no relation, same convention as activeSongDatabaseId (deleting
   // the venue just leaves this pointing at nothing, harmlessly).
-  currentVenueId         String?
-  bio                    String?
-  photoUrl               String?
-  logoUrl                String?
-  instagramUrl           String?
-  facebookUrl            String?
-  tiktokUrl              String?
-  youtubeUrl             String?
-  spotifyUrl             String?
-  websiteUrl             String?
-  contactEmail           String?
-  defaultTipAmountsCents Int[]    @default([500, 1000, 2000])
-  brandPrimaryColor      String?
-  brandSecondaryColor    String?
-  disableRecentlyPlayedPrompt Boolean @default(false)
+  currentVenueId              String?
+  bio                         String?
+  photoUrl                    String?
+  logoUrl                     String?
+  instagramUrl                String?
+  facebookUrl                 String?
+  tiktokUrl                   String?
+  youtubeUrl                  String?
+  spotifyUrl                  String?
+  websiteUrl                  String?
+  contactEmail                String?
+  defaultTipAmountsCents      Int[]     @default([500, 1000, 2000])
+  brandPrimaryColor           String?
+  brandSecondaryColor         String?
+  disableRecentlyPlayedPrompt Boolean   @default(false)
   // Public "share this calendar" links (webcal:// → https://) from iCloud
   // (or any RFC 5545) calendars — e.g. a general gigs calendar plus a
   // separate weekly-residency calendar. /gigs merges every URL here into
   // one sorted list, no dashboard CRUD needed since Lochie already manages
   // his gig dates in Calendar.
-  gigsCalendarUrls        String[] @default([])
-  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+  gigsCalendarUrls            String[]  @default([])
+  updatedAt                   DateTime  @updatedAt @db.Timestamptz(3)
 }
 
 // Public /book form submissions — reviewed and actioned manually from the
 // dashboard, same "no queue automation, artist handles it by hand" pattern
 // as request moderation elsewhere in this app.
 model BookingInquiry {
-  id        String        @id @default(cuid())
-  name      String
-  email     String
-  phone     String?
+  id          String        @id @default(cuid())
+  performerId String
+  performer   Performer     @relation(fields: [performerId], references: [id])
+  name        String
+  email       String
+  phone       String?
   // Free text, not DateTime — this is informational only (never used in a
   // calculation/sort where a timezone bug could bite, per the DateTime
   // pitfall already hit and fixed elsewhere in this schema).
-  eventDate String?
-  location  String?
-  message   String
-  status    InquiryStatus @default(NEW)
-  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  eventDate   String?
+  location    String?
+  message     String
+  status      InquiryStatus @default(NEW)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
 
-  @@index([status, createdAt])
+  @@index([performerId, status, createdAt])
 }

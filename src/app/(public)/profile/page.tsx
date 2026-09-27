@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { getSettings } from "@/lib/settings";
+import { getDefaultPerformer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,8 @@ const SOCIAL_LINKS: { key: "instagramUrl" | "facebookUrl" | "tiktokUrl" | "youtu
 ];
 
 export default async function ProfilePage() {
-  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const performer = await getDefaultPerformer();
+  const settings = await getSettings(performer.id);
 
   const links = SOCIAL_LINKS.filter((link) => settings?.[link.key]);
 

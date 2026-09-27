@@ -19,13 +19,18 @@ const NAV_ITEMS = [
   { href: "/dashboard/settings", label: "Settings" },
 ];
 
-export default function DashboardHeader() {
+const HIDDEN_ON = ["/dashboard/login", "/dashboard/set-password", "/dashboard/no-access"];
+
+export default function DashboardHeader({ performerName }: { performerName: string | null }) {
   const pathname = usePathname();
-  if (pathname === "/dashboard/login" || pathname === "/dashboard/set-password") return null;
+  if (HIDDEN_ON.includes(pathname)) return null;
 
   return (
     <header className="border-b border-border bg-surface px-4 py-3 flex items-center gap-4">
-      <span className="font-semibold text-lg shrink-0">Dashboard</span>
+      <span className="font-semibold text-lg shrink-0">
+        Dashboard
+        {performerName && <span className="ml-2 text-sm font-normal text-foreground-muted">{performerName}</span>}
+      </span>
       {/* Horizontally scrollable on narrow screens — 8 sections don't fit one row
           on a phone, and this is safer than hiding items behind a menu since
           Live Queue is left open mid-gig and needs to stay reachable in one tap. */}

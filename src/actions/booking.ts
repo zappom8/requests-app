@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { InquiryStatus } from "@/generated/prisma/client";
+import { getDefaultPerformer, requirePerformer } from "@/lib/auth";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -30,8 +31,12 @@ export async function submitBookingInquiry(formData: FormData): Promise<ActionRe
     return { success: false, error: "Please enter a valid email address." };
   }
 
+  // Only the default performer has a public /book page so far.
+  const performer = await getDefaultPerformer();
+
   await prisma.bookingInquiry.create({
     data: {
+      performerId: performer.id,
       name,
       email,
       phone: optionalString(formData, "phone"),
@@ -46,7 +51,8 @@ export async function submitBookingInquiry(formData: FormData): Promise<ActionRe
 }
 
 export async function updateBookingInquiryStatus(id: string, status: InquiryStatus): Promise<ActionResult> {
-  await prisma.bookingInquiry.update({ where: { id }, data: { status } });
+  const performer = await requirePerformer();
+  await prisma.bookingInquiry.updateMany({ where: { id, performerId: performer.id }, data: { status } });
   revalidatePath("/dashboard/bookings");
   return { success: true };
 }

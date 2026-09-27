@@ -19,10 +19,15 @@ const SAMPLE_SONGS: { name: string; artist: string; decade: string }[] = [
 ];
 
 async function main() {
+  const performer = await prisma.performer.upsert({
+    where: { slug: "lochie" },
+    update: {},
+    create: { slug: "lochie", name: "Lochie" },
+  });
   const database = await prisma.songDatabase.upsert({
     where: { id: "general-requests" },
     update: {},
-    create: { id: "general-requests", name: "General Requests" },
+    create: { id: "general-requests", performerId: performer.id, name: "General Requests" },
   });
 
   for (const song of SAMPLE_SONGS) {
@@ -35,9 +40,9 @@ async function main() {
   }
 
   await prisma.settings.upsert({
-    where: { id: 1 },
+    where: { performerId: performer.id },
     update: { activeSongDatabaseId: database.id },
-    create: { id: 1, activeSongDatabaseId: database.id },
+    create: { performerId: performer.id, activeSongDatabaseId: database.id },
   });
 
   console.log(`Seeded "${database.name}" with ${SAMPLE_SONGS.length} songs and set it active.`);

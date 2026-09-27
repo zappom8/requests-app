@@ -1,4 +1,5 @@
 import { getPayments } from "@/lib/payments";
+import { getCurrentPerformer } from "@/lib/auth";
 import RefundButton from "./RefundButton";
 import LocalTime from "../../LocalTime";
 
@@ -14,7 +15,8 @@ export default async function PaymentsPage({
   searchParams: Promise<{ dateFrom?: string; dateTo?: string }>;
 }) {
   const sp = await searchParams;
-  const { items, totals } = await getPayments({ dateFrom: sp.dateFrom, dateTo: sp.dateTo });
+  const performer = await getCurrentPerformer();
+  const { items, totals } = await getPayments({ dateFrom: sp.dateFrom, dateTo: sp.dateTo }, performer.id);
 
   const exportHref = `/api/dashboard/payments/export${
     sp.dateFrom || sp.dateTo

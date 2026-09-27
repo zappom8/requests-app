@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getCurrentPerformer } from "@/lib/auth";
 import { createSong } from "@/actions/songs";
 import SongList from "./SongList";
 import CsvImportForm from "./CsvImportForm";
@@ -11,9 +12,10 @@ export default async function SongManagerPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const performer = await getCurrentPerformer();
 
-  const database = await prisma.songDatabase.findUnique({
-    where: { id },
+  const database = await prisma.songDatabase.findFirst({
+    where: { id, performerId: performer.id },
     include: { songs: { orderBy: { name: "asc" } } },
   });
 

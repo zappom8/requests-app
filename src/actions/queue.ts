@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { broadcastQueueChanged } from "@/lib/supabase/server";
+import { assertOwnsDatabase, requirePerformer } from "@/lib/auth";
 
 // Both actions are soft — they change status and drop out of the active
 // queue view, but the row is never deleted. Full permanent history. Take an
@@ -17,8 +18,10 @@ import { broadcastQueueChanged } from "@/lib/supabase/server";
 // Without this guard that would silently overwrite the row's real PLAYED
 // status/playedAt with DELETED, losing the accurate play record.
 export async function markPlayed(requestIds: string[], songDatabaseId: string) {
+  const performer = await requirePerformer();
+  await assertOwnsDatabase(performer.id, songDatabaseId);
   await prisma.request.updateMany({
-    where: { id: { in: requestIds }, status: "QUEUED" },
+    where: { id: { in: requestIds }, songDatabaseId, status: "QUEUED" },
     data: { status: "PLAYED", playedAt: new Date() },
   });
 
@@ -27,8 +30,10 @@ export async function markPlayed(requestIds: string[], songDatabaseId: string) {
 }
 
 export async function deleteRequest(requestIds: string[], songDatabaseId: string) {
+  const performer = await requirePerformer();
+  await assertOwnsDatabase(performer.id, songDatabaseId);
   await prisma.request.updateMany({
-    where: { id: { in: requestIds }, status: "QUEUED" },
+    where: { id: { in: requestIds }, songDatabaseId, status: "QUEUED" },
     data: { status: "DELETED", deletedAt: new Date() },
   });
 

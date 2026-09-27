@@ -29,16 +29,17 @@ export type HistoryItem = {
   databaseName: string;
 };
 
-export function buildHistoryWhere(filters: HistoryFilters): Prisma.RequestWhereInput {
+export function buildHistoryWhere(filters: HistoryFilters, performerId: string): Prisma.RequestWhereInput {
   // Auto-added rows — a SongPairing trigger or a Banger Mode activation —
   // were never a real request, so they're excluded from History (the list,
   // its count, and "delete all filtered") exactly like they already are
   // from Statistics and the recently-played prompt.
   const where: Prisma.RequestWhereInput = {
+    songDatabase: { performerId },
     isPairedAddition: false,
     isBangerAddition: false,
     // Test requests (requester or billing name containing "test", any
-    // case) are hidden too — same rule as Statistics' REAL_REQUESTS_ONLY.
+    // case) are hidden too — same rule as Statistics' realRequestsOnly.
     // billingName is usually NULL (only set with a tip), and a bare NOT on
     // a NULL comparison excludes the row in SQL, so NULL is allowed
     // explicitly.
@@ -80,9 +81,10 @@ export function buildHistoryWhere(filters: HistoryFilters): Prisma.RequestWhereI
 
 export async function getRequestHistory(
   filters: HistoryFilters,
+  performerId: string,
   cursor: string | null
 ): Promise<{ items: HistoryItem[]; nextCursor: string | null }> {
-  const where = buildHistoryWhere(filters);
+  const where = buildHistoryWhere(filters, performerId);
 
   const requests = await prisma.request.findMany({
     where,
@@ -125,6 +127,6 @@ export async function getRequestHistory(
   };
 }
 
-export async function countRequestHistory(filters: HistoryFilters): Promise<number> {
-  return prisma.request.count({ where: buildHistoryWhere(filters) });
+export async function countRequestHistory(filters: HistoryFilters, performerId: string): Promise<number> {
+  return prisma.request.count({ where: buildHistoryWhere(filters, performerId) });
 }

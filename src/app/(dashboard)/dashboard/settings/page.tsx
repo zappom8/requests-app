@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/prisma";
+import { getSettings } from "@/lib/settings";
+import { getCurrentPerformer } from "@/lib/auth";
 import { updateSettings } from "@/actions/settings";
 import ImageUploadForm from "./ImageUploadForm";
 
@@ -22,7 +23,8 @@ function textField(label: string, name: string, defaultValue: string | null | un
 }
 
 export default async function SettingsPage() {
-  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const performer = await getCurrentPerformer();
+  const settings = await getSettings(performer.id);
 
   const defaultTipAmounts = (settings?.defaultTipAmountsCents ?? [500, 1000, 2000])
     .map((c) => (c / 100).toString())

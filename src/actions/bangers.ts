@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { broadcastQueueChanged } from "@/lib/supabase/server";
+import { assertOwnsDatabase, assertOwnsVenue, requirePerformer } from "@/lib/auth";
 
 export type SongRef = { songName: string; artistName: string };
 
@@ -38,6 +39,8 @@ const BANGER_ADDITION_REQUESTER_NAME = "Banger Mode";
 // songs the first pass hadn't committed yet.
 export async function activateBangerMode(songDatabaseId: string, venueId: string | null) {
   if (!venueId) return;
+  const performer = await requirePerformer();
+  await Promise.all([assertOwnsDatabase(performer.id, songDatabaseId), assertOwnsVenue(performer.id, venueId)]);
 
   const [bangers, catalogSongs, queuedRequests] = await Promise.all([
     prisma.bangerSong.findMany({ where: { venueId } }),
@@ -61,7 +64,7 @@ export async function activateBangerMode(songDatabaseId: string, venueId: string
   // song keys) — a banger with no pairing, or whose pairing partners
   // aren't also bangers right now, just ends up alone in its own cluster.
   const memberships = await prisma.songPairingGroupMember.findMany({
-    where: { OR: eligible.map((s) => ({ songName: s.name, artistName: s.artist })) },
+    where: { performerId: performer.id, OR: eligible.map((s) => ({ songName: s.name, artistName: s.artist })) },
   });
   const bangerKeysByGroup = new Map<string, string[]>();
   for (const m of memberships) {
@@ -150,6 +153,8 @@ export async function addBangers(formData: FormData) {
   const songs = JSON.parse(String(formData.get("songs") ?? "[]")) as SongRef[];
   const valid = songs.filter((s) => s.songName?.trim() && s.artistName?.trim());
   if (!venueId || valid.length === 0) throw new Error("A venue and at least one song are required");
+  const performer = await requirePerformer();
+  await assertOwnsVenue(performer.id, venueId);
 
   await prisma.bangerSong.createMany({
     data: valid.map((s) => ({ venueId, songName: s.songName.trim(), artistName: s.artistName.trim() })),
@@ -163,8 +168,9 @@ export async function addBangers(formData: FormData) {
 export async function removeBanger(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("id is required");
+  const performer = await requirePerformer();
 
-  await prisma.bangerSong.delete({ where: { id } });
+  await prisma.bangerSong.deleteMany({ where: { id, venue: { performerId: performer.id } } });
 
   revalidatePath("/dashboard/bangers");
   revalidatePath("/dashboard/queue");

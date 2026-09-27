@@ -3,6 +3,9 @@ import { Prisma } from "@/generated/prisma/client";
 
 export type DateRange = { from: Date; to: Date; daysOfWeek?: number[] };
 
+// A date range for one performer's data.
+export type StatsScope = DateRange & { performerId: string };
+
 // daysOfWeek entries are 0 (Sunday) .. 6 (Saturday), matching Postgres's
 // EXTRACT(DOW). Invalid/out-of-range values are dropped rather than
 // throwing, since this only ever comes from a query string.
@@ -44,7 +47,10 @@ function dowFilter(daysOfWeek: number[] | undefined) {
 // name contains "test" (any case). Song titles aren't checked, so a real
 // request for e.g. "The Greatest Show" still counts. History applies the
 // same rule (src/lib/history.ts buildHistoryWhere).
-const REAL_REQUESTS_ONLY = Prisma.sql`AND "isPairedAddition" = false AND "isBangerAddition" = false AND "requesterName" NOT ILIKE '%test%' AND COALESCE("billingName", '') NOT ILIKE '%test%'`;
+// Also scoped to one performer's databases.
+function realRequestsOnly(performerId: string) {
+  return Prisma.sql`AND "songDatabaseId" IN (SELECT "id" FROM "SongDatabase" WHERE "performerId" = ${performerId}) AND "isPairedAddition" = false AND "isBangerAddition" = false AND "requesterName" NOT ILIKE '%test%' AND COALESCE("billingName", '') NOT ILIKE '%test%'`;
+}
 
 export type Overview = {
   totalRequests: number;
@@ -53,7 +59,7 @@ export type Overview = {
   averageTipCents: number;
 };
 
-export async function getOverview({ from, to, daysOfWeek }: DateRange): Promise<Overview> {
+export async function getOverview({ from, to, daysOfWeek, performerId }: StatsScope): Promise<Overview> {
   const rows = await prisma.$queryRaw<
     { totalRequests: bigint; totalTipCents: bigint | null; tippedRequestCount: bigint }[]
   >(Prisma.sql`
@@ -62,7 +68,7 @@ export async function getOverview({ from, to, daysOfWeek }: DateRange): Promise<
       SUM(CASE WHEN "tipAmountCents" > 0 THEN "tipAmountCents" ELSE 0 END) AS "totalTipCents",
       COUNT(*) FILTER (WHERE "tipAmountCents" > 0) AS "tippedRequestCount"
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
   `);
 
   const row = rows[0];
@@ -80,11 +86,11 @@ export async function getOverview({ from, to, daysOfWeek }: DateRange): Promise<
 
 export type RankedSong = { songName: string; artistName: string; value: number };
 
-export async function getMostRequestedSongs({ from, to, daysOfWeek }: DateRange, limit = 10): Promise<RankedSong[]> {
+export async function getMostRequestedSongs({ from, to, daysOfWeek, performerId }: StatsScope, limit = 10): Promise<RankedSong[]> {
   const rows = await prisma.$queryRaw<{ songName: string; artistName: string; value: bigint }[]>(Prisma.sql`
     SELECT "songName", "artistName", COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY "songName", "artistName"
     ORDER BY value DESC
     LIMIT ${limit}
@@ -93,13 +99,13 @@ export async function getMostRequestedSongs({ from, to, daysOfWeek }: DateRange,
 }
 
 export async function getMostProfitableSongs(
-  { from, to, daysOfWeek }: DateRange,
+  { from, to, daysOfWeek, performerId }: StatsScope,
   limit = 10
 ): Promise<RankedSong[]> {
   const rows = await prisma.$queryRaw<{ songName: string; artistName: string; value: bigint }[]>(Prisma.sql`
     SELECT "songName", "artistName", SUM("tipAmountCents") AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY "songName", "artistName"
     HAVING SUM("tipAmountCents") > 0
     ORDER BY value DESC
@@ -109,13 +115,13 @@ export async function getMostProfitableSongs(
 }
 
 export async function getTopTippingSongsByAverage(
-  { from, to, daysOfWeek }: DateRange,
+  { from, to, daysOfWeek, performerId }: StatsScope,
   limit = 10
 ): Promise<RankedSong[]> {
   const rows = await prisma.$queryRaw<{ songName: string; artistName: string; value: number }[]>(Prisma.sql`
     SELECT "songName", "artistName", ROUND(AVG("tipAmountCents")) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} AND "tipAmountCents" > 0 ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} AND "tipAmountCents" > 0 ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY "songName", "artistName"
     ORDER BY value DESC
     LIMIT ${limit}
@@ -126,13 +132,13 @@ export async function getTopTippingSongsByAverage(
 export type RankedLabel = { label: string; value: number };
 
 export async function getMostRequestedArtists(
-  { from, to, daysOfWeek }: DateRange,
+  { from, to, daysOfWeek, performerId }: StatsScope,
   limit = 10
 ): Promise<RankedLabel[]> {
   const rows = await prisma.$queryRaw<{ label: string; value: bigint }[]>(Prisma.sql`
     SELECT "artistName" AS label, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY "artistName"
     ORDER BY value DESC
     LIMIT ${limit}
@@ -140,23 +146,23 @@ export async function getMostRequestedArtists(
   return rows.map((r) => ({ ...r, value: Number(r.value) }));
 }
 
-export async function getMostRequestedDecades({ from, to, daysOfWeek }: DateRange): Promise<RankedLabel[]> {
+export async function getMostRequestedDecades({ from, to, daysOfWeek, performerId }: StatsScope): Promise<RankedLabel[]> {
   const rows = await prisma.$queryRaw<{ label: string; value: bigint }[]>(Prisma.sql`
     SELECT COALESCE("decade", 'Unknown') AS label, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY label
     ORDER BY value DESC
   `);
   return rows.map((r) => ({ ...r, value: Number(r.value) }));
 }
 
-export async function getMostRequestedDatabases({ from, to, daysOfWeek }: DateRange): Promise<RankedLabel[]> {
+export async function getMostRequestedDatabases({ from, to, daysOfWeek, performerId }: StatsScope): Promise<RankedLabel[]> {
   const rows = await prisma.$queryRaw<{ label: string; value: bigint }[]>(Prisma.sql`
     SELECT sd.name AS label, COUNT(*) AS value
     FROM "Request" r
     JOIN "SongDatabase" sd ON sd.id = r."songDatabaseId"
-    WHERE r."requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE r."requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY sd.name
     ORDER BY value DESC
   `);
@@ -165,11 +171,11 @@ export async function getMostRequestedDatabases({ from, to, daysOfWeek }: DateRa
 
 export type MonthlyPoint = { month: string; requests: number; tipCents: number };
 
-export async function getMonthly({ from, to, daysOfWeek }: DateRange): Promise<MonthlyPoint[]> {
+export async function getMonthly({ from, to, daysOfWeek, performerId }: StatsScope): Promise<MonthlyPoint[]> {
   const rows = await prisma.$queryRaw<{ month: Date; requests: bigint; tipcents: bigint }[]>(Prisma.sql`
     SELECT date_trunc('month', ${localRequestedAt}) AS month, COUNT(*) AS requests, SUM("tipAmountCents") AS tipcents
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY month
     ORDER BY month ASC
   `);
@@ -182,22 +188,22 @@ export async function getMonthly({ from, to, daysOfWeek }: DateRange): Promise<M
 
 export const DOW_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export async function getRequestsByDayOfWeek({ from, to, daysOfWeek }: DateRange): Promise<RankedLabel[]> {
+export async function getRequestsByDayOfWeek({ from, to, daysOfWeek, performerId }: StatsScope): Promise<RankedLabel[]> {
   const rows = await prisma.$queryRaw<{ dow: number; value: bigint }[]>(Prisma.sql`
     SELECT EXTRACT(DOW FROM ${localRequestedAt})::int AS dow, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY dow
     ORDER BY value DESC
   `);
   return rows.map((r) => ({ label: DOW_LABELS[r.dow], value: Number(r.value) }));
 }
 
-export async function getRequestsByHour({ from, to, daysOfWeek }: DateRange): Promise<RankedLabel[]> {
+export async function getRequestsByHour({ from, to, daysOfWeek, performerId }: StatsScope): Promise<RankedLabel[]> {
   const rows = await prisma.$queryRaw<{ hour: number; value: bigint }[]>(Prisma.sql`
     SELECT EXTRACT(HOUR FROM ${localRequestedAt})::int AS hour, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${REAL_REQUESTS_ONLY}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId)}
     GROUP BY hour
     ORDER BY value DESC
   `);

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentVenueId } from "@/lib/settings";
+import { getCurrentPerformer } from "@/lib/auth";
 import BangersManager from "./BangersManager";
 import VenuePicker from "./VenuePicker";
 
@@ -12,17 +13,22 @@ export default async function BangersPage({
   searchParams: Promise<{ venueId?: string }>;
 }) {
   const sp = await searchParams;
+  const performer = await getCurrentPerformer();
   const [venues, currentVenueId] = await Promise.all([
-    prisma.venue.findMany({ orderBy: { name: "asc" } }),
-    getCurrentVenueId(),
+    prisma.venue.findMany({ where: { performerId: performer.id }, orderBy: { name: "asc" } }),
+    getCurrentVenueId(performer.id),
   ]);
 
-  const selectedVenueId = sp.venueId ?? currentVenueId ?? venues[0]?.id ?? null;
+  // Only ever one of this performer's own venues, whatever the URL says.
+  const ownVenueIds = new Set(venues.map((v) => v.id));
+  const selectedVenueId =
+    [sp.venueId, currentVenueId, venues[0]?.id].find((id): id is string => !!id && ownVenueIds.has(id)) ?? null;
 
   const [songs, bangers] = await Promise.all([
     // Deduped across every database — the picker shouldn't show the same
     // song once per database it happens to be catalogued in.
     prisma.song.findMany({
+      where: { songDatabase: { performerId: performer.id } },
       distinct: ["name", "artist"],
       orderBy: { name: "asc" },
       select: { name: true, artist: true },

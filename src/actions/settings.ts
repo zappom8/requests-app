@@ -3,8 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-
-const SETTINGS_ID = 1;
+import { requirePerformer } from "@/lib/auth";
 
 // Matches Supabase's "branding" bucket cap — checked here too so a bad
 // upload fails fast with a clear message instead of Supabase's own error.
@@ -45,6 +44,7 @@ function optionalString(formData: FormData, key: string): string | null {
 }
 
 export async function updateSettings(formData: FormData) {
+  const performer = await requirePerformer();
   const bio = optionalString(formData, "bio");
   const instagramUrl = optionalString(formData, "instagramUrl");
   const facebookUrl = optionalString(formData, "facebookUrl");
@@ -68,7 +68,7 @@ export async function updateSettings(formData: FormData) {
     .filter((n) => Number.isFinite(n) && n > 0);
 
   await prisma.settings.upsert({
-    where: { id: SETTINGS_ID },
+    where: { performerId: performer.id },
     update: {
       bio,
       instagramUrl,
@@ -85,7 +85,7 @@ export async function updateSettings(formData: FormData) {
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
     create: {
-      id: SETTINGS_ID,
+      performerId: performer.id,
       bio,
       instagramUrl,
       facebookUrl,
@@ -114,6 +114,7 @@ export async function uploadBrandingImage(formData: FormData) {
   if ((field !== "photoUrl" && field !== "logoUrl") || !file) {
     throw new Error("field and file are required");
   }
+  const performer = await requirePerformer();
 
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new Error("Image must be 5MB or smaller.");
@@ -125,7 +126,7 @@ export async function uploadBrandingImage(formData: FormData) {
     throw new Error("File isn't a recognized image format (PNG, JPEG, GIF, or WebP).");
   }
 
-  const path = `${field}-${Date.now()}.${detected.ext}`;
+  const path = `${performer.id}/${field}-${Date.now()}.${detected.ext}`;
 
   const supabase = getSupabaseAdminClient();
   const { error: uploadError } = await supabase.storage
@@ -139,9 +140,9 @@ export async function uploadBrandingImage(formData: FormData) {
   const { data } = supabase.storage.from("branding").getPublicUrl(path);
 
   await prisma.settings.upsert({
-    where: { id: SETTINGS_ID },
+    where: { performerId: performer.id },
     update: { [field]: data.publicUrl },
-    create: { id: SETTINGS_ID, [field]: data.publicUrl },
+    create: { performerId: performer.id, [field]: data.publicUrl },
   });
 
   revalidatePath("/dashboard/settings");
@@ -151,8 +152,9 @@ export async function uploadBrandingImage(formData: FormData) {
 export async function removeBrandingImage(formData: FormData) {
   const field = String(formData.get("field") ?? ""); // "photoUrl" | "logoUrl"
   if (field !== "photoUrl" && field !== "logoUrl") throw new Error("field is required");
+  const performer = await requirePerformer();
 
-  const settings = await prisma.settings.findUnique({ where: { id: SETTINGS_ID } });
+  const settings = await prisma.settings.findUnique({ where: { performerId: performer.id } });
   const currentUrl = settings?.[field];
 
   if (currentUrl) {
@@ -163,7 +165,7 @@ export async function removeBrandingImage(formData: FormData) {
     }
   }
 
-  await prisma.settings.update({ where: { id: SETTINGS_ID }, data: { [field]: null } });
+  await prisma.settings.updateMany({ where: { performerId: performer.id }, data: { [field]: null } });
 
   revalidatePath("/dashboard/settings");
   revalidatePath("/profile");

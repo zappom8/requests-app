@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { squareClient } from "@/lib/square";
 import { SquareError } from "square";
 import { revalidatePath } from "next/cache";
+import { requirePerformer } from "@/lib/auth";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -19,7 +20,10 @@ export async function refundTip(formData: FormData): Promise<ActionResult> {
   const requestId = String(formData.get("requestId") ?? "");
   if (!requestId) return { success: false, error: "requestId is required" };
 
-  const request = await prisma.request.findUnique({ where: { id: requestId } });
+  const performer = await requirePerformer();
+  const request = await prisma.request.findFirst({
+    where: { id: requestId, songDatabase: { performerId: performer.id } },
+  });
   if (!request) return { success: false, error: "Request not found" };
   if (request.paymentStatus !== "SUCCEEDED") {
     return { success: false, error: `Can't refund a payment with status ${request.paymentStatus}` };
