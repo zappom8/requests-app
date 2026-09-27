@@ -9,22 +9,9 @@
 // test is done — it's scaffolding, not a real feature.
 
 import { useEffect, useRef, useState } from "react";
+import { FOOTDRUMS_SONGS } from "./footdrums-songs";
 
 type LogEntry = { time: string; text: string };
-
-// Mirrors the forScore MIDI "Open" commands in the test setlists
-// (Footdrums-MIDI-Patch-Test / Footdrums-MIDI-Open-Test .4ss), stored by
-// forScore as raw hex like "C0 32" — i.e. Program Change on channel 1 only.
-const FORSCORE_TEST_SONGS = [
-  { title: "Wish You Well", program: 50 },
-  { title: "I'm Gonna Be (500 Miles)", program: 51 },
-  { title: "How You Remind Me", program: 52 },
-  { title: "What About Me?", program: 53 },
-  { title: "Perfect", program: 54 },
-  { title: "Yesterday", program: 55 },
-  { title: "Love Story", program: 56 },
-  { title: "Rolling in the Deep", program: 57 },
-];
 
 // Web MIDI Browser's bridge (and this is true of every WKWebView-based
 // Web MIDI shim, not just this one app) works by injecting a JS polyfill
@@ -62,12 +49,21 @@ function describe(data: Uint8Array): string {
 export default function MidiTestPage() {
   const [status, setStatus] = useState("Tap Connect to request MIDI access.");
   const [outputs, setOutputs] = useState<{ id: string; name: string }[]>([]);
-  const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
+  const [selectedOutputId, setSelectedOutputIdState] = useState<string | null>(null);
+  const [songFilter, setSongFilter] = useState("");
   const [channel, setChannel] = useState(1);
   const [program, setProgram] = useState(0);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<string[]>([]);
   const midiAccessRef = useRef<MIDIAccess | null>(null);
+  // Mirrored in a ref so sends that happen right after an automatic
+  // reconnect (inside an async callback) see the current choice.
+  const selectedOutputIdRef = useRef<string | null>(null);
+
+  function setSelectedOutputId(id: string | null) {
+    selectedOutputIdRef.current = id;
+    setSelectedOutputIdState(id);
+  }
 
   function addLog(text: string) {
     const time = new Date().toLocaleTimeString();
@@ -85,7 +81,8 @@ export default function MidiTestPage() {
     access.outputs.forEach((o) => list.push({ id: o.id, name: o.name ?? "Unnamed output" }));
     setOutputs(list);
     setStatus(`${list.length} output(s) found${list.length ? ": " + list.map((o) => o.name).join(", ") : ""}`);
-    setSelectedOutputId((current) => current ?? list[0]?.id ?? null);
+    const current = selectedOutputIdRef.current;
+    setSelectedOutputId(current && list.some((o) => o.id === current) ? current : (list[0]?.id ?? null));
 
     access.inputs.forEach((input) => {
       input.onmidimessage = (e) => {
@@ -94,11 +91,11 @@ export default function MidiTestPage() {
     });
   }
 
-  async function connect() {
+  async function connect(): Promise<MIDIAccess | null> {
     setDiagnostics(getBridgeDiagnostics());
     if (!navigator.requestMIDIAccess) {
       setStatus("navigator.requestMIDIAccess isn't available in this browser — open this page inside Web MIDI Browser, not Safari.");
-      return;
+      return null;
     }
     try {
       setStatus("Requesting MIDI access…");
@@ -106,18 +103,32 @@ export default function MidiTestPage() {
       midiAccessRef.current = access;
       access.onstatechange = () => refreshFromAccess(access);
       refreshFromAccess(access);
+      return access;
     } catch (e) {
       setStatus(`MIDI access failed: ${e instanceof Error ? e.message : "unknown error"}`);
+      return null;
     }
+  }
+
+  // Returns the selected output, reconnecting first if it has gone away
+  // (e.g. the MIDI session dropped while Web MIDI Browser was in the
+  // background), so a song tap never needs a manual Connect beforehand.
+  async function getOutput(): Promise<MIDIOutput | null> {
+    const id = selectedOutputIdRef.current;
+    const existing = id ? midiAccessRef.current?.outputs.get(id) : undefined;
+    if (existing && existing.state !== "disconnected") return existing;
+    addLog("Output not available — reconnecting…");
+    const access = await connect();
+    const newId = selectedOutputIdRef.current;
+    return (newId ? access?.outputs.get(newId) : undefined) ?? null;
   }
 
   function refresh() {
     if (midiAccessRef.current) refreshFromAccess(midiAccessRef.current);
   }
 
-  function sendProgramChange(programToSend = program, label?: string) {
-    const access = midiAccessRef.current;
-    const output = selectedOutputId ? access?.outputs.get(selectedOutputId) : null;
+  async function sendProgramChange(programToSend = program, label?: string) {
+    const output = await getOutput();
     if (!output) {
       addLog("No output selected");
       return;
@@ -129,9 +140,8 @@ export default function MidiTestPage() {
     addLog(`SENT → ${output.name} — Program Change  ch ${ch}  program ${pc}${label ? `  (${label})` : ""}`);
   }
 
-  function sendTestNote() {
-    const access = midiAccessRef.current;
-    const output = selectedOutputId ? access?.outputs.get(selectedOutputId) : null;
+  async function sendTestNote() {
+    const output = await getOutput();
     if (!output) {
       addLog("No output selected");
       return;
@@ -143,6 +153,24 @@ export default function MidiTestPage() {
       addLog(`SENT → ${output.name} — Note Off  middle C`);
     }, 250);
   }
+
+  // Connect automatically on load, and again whenever the page comes back
+  // to the foreground (switching back from forScore etc.), instead of
+  // needing Connect to be tapped each time.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off connect on mount
+    void connect();
+    function onVisible() {
+      if (document.visibilityState === "visible") void connect();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- connect only reads refs/setters
+  }, []);
 
   // Clean up message handlers on unmount.
   useEffect(() => {
@@ -185,7 +213,7 @@ export default function MidiTestPage() {
         <p className="text-sm">{status}</p>
         <div className="flex gap-2">
           <button
-            onClick={connect}
+            onClick={() => void connect()}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
           >
             Connect
@@ -218,22 +246,30 @@ export default function MidiTestPage() {
       )}
 
       <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
-        <h2 className="text-sm font-medium">forScore test set list</h2>
+        <h2 className="text-sm font-medium">Footdrums (Test) set list</h2>
         <p className="text-xs text-foreground-muted">
-          Tap a song to open its &quot;(MIDI Patch Test)&quot; or &quot;(MIDI Open Test)&quot; score in forScore. Keep
-          Channel at 1.
+          Tap a song to open its &quot;(Test)&quot; score in forScore. Keep Channel at 1.
         </p>
+        <input
+          type="search"
+          value={songFilter}
+          onChange={(e) => setSongFilter(e.target.value)}
+          placeholder="Search songs"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+        />
         <div className="space-y-2">
-          {FORSCORE_TEST_SONGS.map((song) => (
-            <button
-              key={song.program}
-              onClick={() => sendProgramChange(song.program, song.title)}
-              className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left text-sm font-medium hover:border-accent"
-            >
-              <span>{song.title}</span>
-              <span className="text-xs font-mono text-foreground-muted">PC {song.program}</span>
-            </button>
-          ))}
+          {FOOTDRUMS_SONGS.filter((song) => song.title.toLowerCase().includes(songFilter.trim().toLowerCase())).map(
+            (song) => (
+              <button
+                key={song.program}
+                onClick={() => void sendProgramChange(song.program, song.title)}
+                className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left text-sm font-medium hover:border-accent"
+              >
+                <span>{song.title}</span>
+                <span className="text-xs font-mono text-foreground-muted">PC {song.program}</span>
+              </button>
+            ),
+          )}
         </div>
       </div>
 
