@@ -12,13 +12,18 @@ import { useEffect, useRef, useState } from "react";
 
 type LogEntry = { time: string; text: string };
 
-// Mirrors the Program Change "open" commands written into the
-// Footdrums-MIDI-Patch-Test.4ss setlist (forScore stores them with channel
-// -1, i.e. any channel), so tapping a song here should open that score.
+// Mirrors the forScore MIDI "Open" commands in the test setlists
+// (Footdrums-MIDI-Patch-Test / Footdrums-MIDI-Open-Test .4ss), stored by
+// forScore as raw hex like "C0 32" — i.e. Program Change on channel 1 only.
 const FORSCORE_TEST_SONGS = [
   { title: "Wish You Well", program: 50 },
   { title: "I'm Gonna Be (500 Miles)", program: 51 },
   { title: "How You Remind Me", program: 52 },
+  { title: "What About Me?", program: 53 },
+  { title: "Perfect", program: 54 },
+  { title: "Yesterday", program: 55 },
+  { title: "Love Story", program: 56 },
+  { title: "Rolling in the Deep", program: 57 },
 ];
 
 // Web MIDI Browser's bridge (and this is true of every WKWebView-based
@@ -215,7 +220,8 @@ export default function MidiTestPage() {
       <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
         <h2 className="text-sm font-medium">forScore test set list</h2>
         <p className="text-xs text-foreground-muted">
-          Tap a song to open its &quot;(MIDI Patch Test)&quot; score in forScore.
+          Tap a song to open its &quot;(MIDI Patch Test)&quot; or &quot;(MIDI Open Test)&quot; score in forScore. Keep
+          Channel at 1.
         </p>
         <div className="space-y-2">
           {FORSCORE_TEST_SONGS.map((song) => (
