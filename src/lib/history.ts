@@ -34,7 +34,19 @@ export function buildHistoryWhere(filters: HistoryFilters): Prisma.RequestWhereI
   // were never a real request, so they're excluded from History (the list,
   // its count, and "delete all filtered") exactly like they already are
   // from Statistics and the recently-played prompt.
-  const where: Prisma.RequestWhereInput = { isPairedAddition: false, isBangerAddition: false };
+  const where: Prisma.RequestWhereInput = {
+    isPairedAddition: false,
+    isBangerAddition: false,
+    // Test requests (requester or billing name containing "test", any
+    // case) are hidden too — same rule as Statistics' REAL_REQUESTS_ONLY.
+    // billingName is usually NULL (only set with a tip), and a bare NOT on
+    // a NULL comparison excludes the row in SQL, so NULL is allowed
+    // explicitly.
+    AND: [
+      { NOT: { requesterName: { contains: "test", mode: "insensitive" } } },
+      { OR: [{ billingName: null }, { NOT: { billingName: { contains: "test", mode: "insensitive" } } }] },
+    ],
+  };
 
   if (filters.song?.trim()) {
     where.songName = { contains: filters.song.trim(), mode: "insensitive" };
