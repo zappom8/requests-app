@@ -428,9 +428,21 @@ export default function LiveQueueList({
                       legitimately differ between server render and the browser
                       (e.g. server in one timezone, phone in another) — expected,
                       not a bug. */}
-                  <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
-                    {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                  </p>
+                  <div className="flex items-start gap-1 shrink-0">
+                    <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
+                      {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                    </p>
+                    {/* Phone only — there's no Delete key there. Kept tiny on
+                        purpose; the laptop deletes with the keyboard. */}
+                    <button
+                      onClick={() => handleDelete(item)}
+                      disabled={pendingActionId === item.id}
+                      aria-label={`Delete ${item.songName}`}
+                      className="sm:hidden -mt-1.5 -mr-2 px-2 py-1 text-base leading-none text-danger/80 hover:text-danger disabled:opacity-50"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
 
                 <div className="text-sm">
