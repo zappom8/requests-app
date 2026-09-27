@@ -12,6 +12,15 @@ import { useEffect, useRef, useState } from "react";
 
 type LogEntry = { time: string; text: string };
 
+// Mirrors the Program Change "open" commands written into the
+// Footdrums-MIDI-Patch-Test.4ss setlist (forScore stores them with channel
+// -1, i.e. any channel), so tapping a song here should open that score.
+const FORSCORE_TEST_SONGS = [
+  { title: "Wish You Well", program: 50 },
+  { title: "I'm Gonna Be (500 Miles)", program: 51 },
+  { title: "How You Remind Me", program: 52 },
+];
+
 // Web MIDI Browser's bridge (and this is true of every WKWebView-based
 // Web MIDI shim, not just this one app) works by injecting a JS polyfill
 // that calls window.webkit.messageHandlers.<name>.postMessage(...) to talk
@@ -101,7 +110,7 @@ export default function MidiTestPage() {
     if (midiAccessRef.current) refreshFromAccess(midiAccessRef.current);
   }
 
-  function sendProgramChange() {
+  function sendProgramChange(programToSend = program, label?: string) {
     const access = midiAccessRef.current;
     const output = selectedOutputId ? access?.outputs.get(selectedOutputId) : null;
     if (!output) {
@@ -109,10 +118,10 @@ export default function MidiTestPage() {
       return;
     }
     const ch = Math.min(16, Math.max(1, channel));
-    const pc = Math.min(127, Math.max(0, program));
+    const pc = Math.min(127, Math.max(0, programToSend));
     const data = [0xc0 | (ch - 1), pc];
     output.send(data);
-    addLog(`SENT → ${output.name} — Program Change  ch ${ch}  program ${pc}`);
+    addLog(`SENT → ${output.name} — Program Change  ch ${ch}  program ${pc}${label ? `  (${label})` : ""}`);
   }
 
   function sendTestNote() {
@@ -204,6 +213,25 @@ export default function MidiTestPage() {
       )}
 
       <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
+        <h2 className="text-sm font-medium">forScore test set list</h2>
+        <p className="text-xs text-foreground-muted">
+          Tap a song to open its &quot;(MIDI Patch Test)&quot; score in forScore.
+        </p>
+        <div className="space-y-2">
+          {FORSCORE_TEST_SONGS.map((song) => (
+            <button
+              key={song.program}
+              onClick={() => sendProgramChange(song.program, song.title)}
+              className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left text-sm font-medium hover:border-accent"
+            >
+              <span>{song.title}</span>
+              <span className="text-xs font-mono text-foreground-muted">PC {song.program}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
         <h2 className="text-sm font-medium">Send Program Change</h2>
         <p className="text-xs text-foreground-muted">
           What forScore listens for to jump to a score. Values here are raw 0–127; if forScore&apos;s own picker
@@ -234,7 +262,7 @@ export default function MidiTestPage() {
           </div>
         </div>
         <button
-          onClick={sendProgramChange}
+          onClick={() => sendProgramChange()}
           className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
         >
           Send Program Change
