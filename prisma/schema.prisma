@@ -143,6 +143,25 @@ model SongKey {
   @@unique([songName, artistName])
 }
 
+// The MIDI Program Change that opens this song's score in a forScore
+// library: each score there has a MIDI "Open" command of Program Change
+// <program> on channel 1 (forScore stores it as raw hex, e.g. "C0 32" =
+// program 50), so sending that message opens the chart. Global by song
+// name+artist, same reasoning as SongKey, but scoped per forScore
+// `library` since each player's iPad library is numbered independently
+// (e.g. Lochie's "Footdrums" vs a second player's own set list).
+model ForScoreProgram {
+  id         String   @id @default(cuid())
+  library    String
+  songName   String
+  artistName String
+  program    Int
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([library, songName, artistName])
+  @@unique([library, program])
+}
+
 // The partial index that keeps Live Queue reads fast regardless of history
 // size (`CREATE INDEX ... ON "Request" (...) WHERE status = 'QUEUED'`) is
 // also added via the hand-written migration — Prisma has no `@@index` syntax
