@@ -7,6 +7,7 @@ import { markPlayed, deleteRequest } from "@/actions/queue";
 import { setCurrentVenue } from "@/actions/venues";
 import { activateBangerMode } from "@/actions/bangers";
 import { bangerKey } from "@/lib/bangerKey";
+import { useMidiOutput } from "@/lib/useMidiOutput";
 
 type SerializedItem = Omit<AdminQueueItem, "requestedAt"> & { requestedAt: string };
 type Venue = { id: string; name: string };
@@ -20,6 +21,7 @@ const FALLBACK_POLL_MS = 30000;
 // sequence guard below drops any response that's no longer the latest one
 // in flight, so this can't happen even under network reordering.
 const REFETCH_DEBOUNCE_MS = 400;
+const FORSCORE_NOTICE_MS = 3000;
 
 export default function LiveQueueList({
   initialQueue,
@@ -27,12 +29,16 @@ export default function LiveQueueList({
   initialBangerKeys,
   venues,
   initialVenueId,
+  forScorePrograms,
 }: {
   initialQueue: SerializedItem[];
   songDatabaseId: string;
   initialBangerKeys: string[];
   venues: Venue[];
   initialVenueId: string | null;
+  // bangerKey(songName, artistName) -> the MIDI Program Change whose
+  // forScore "Open" command opens that song's chart (channel 1).
+  forScorePrograms: Record<string, number>;
 }) {
   const [queue, setQueueState] = useState(initialQueue);
   const [bangerKeys, setBangerKeysState] = useState(new Set(initialBangerKeys));
@@ -40,6 +46,12 @@ export default function LiveQueueList({
   const [currentVenueId, setCurrentVenueIdState] = useState(initialVenueId);
   const [pendingActionId, setPendingActionIdState] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndexState] = useState(0);
+  const [forScoreNotice, setForScoreNotice] = useState<{ text: string; ok: boolean } | null>(null);
+  const forScoreNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // midi.send only reads refs inside the hook, so the copy captured by the
+  // once-registered keydown listener below never goes stale; likewise
+  // forScorePrograms is fixed for the page's lifetime.
+  const midi = useMidiOutput();
   const refetchSeq = useRef(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // One entry per currently-rendered card, in display order — measured to
@@ -212,6 +224,26 @@ export default function LiveQueueList({
     }
   }
 
+  function showForScoreNotice(text: string, ok: boolean) {
+    setForScoreNotice({ text, ok });
+    if (forScoreNoticeTimer.current) clearTimeout(forScoreNoticeTimer.current);
+    forScoreNoticeTimer.current = setTimeout(() => setForScoreNotice(null), FORSCORE_NOTICE_MS);
+  }
+
+  // Sends the song's Program Change on channel 1 — matching the raw "C0 xx"
+  // Open command stored against each score in the forScore set list.
+  async function handleOpenInForScore(item: SerializedItem) {
+    syncSelectionToItem(item);
+    const program = forScorePrograms[bangerKey(item.songName, item.artistName)];
+    if (program === undefined) {
+      showForScoreNotice(`No forScore number for ${item.songName}`, false);
+      return;
+    }
+    const sentTo = await midi.send([0xc0, program]);
+    if (sentTo) showForScoreNotice(`Opened ${item.songName} in forScore`, true);
+    else showForScoreNotice("No MIDI output — check the iPad connection", false);
+  }
+
   // Banger Mode: turning it on stages every song on the current venue's
   // Bangers list as a real queue entry (see activateBangerMode — excluded
   // from Statistics and never shown on the public /queue page), then this
@@ -226,7 +258,7 @@ export default function LiveQueueList({
   // (so you're not stuck only ever acting on the top card — e.g. skip past
   // "Blinding Lights" to play "I'm Gonna Be" further down without touching
   // the mouse), Space/Enter plays whatever's selected, Delete/Backspace
-  // removes it, and B toggles Banger Mode. Registered exactly once (see
+  // removes it, F opens it in forScore, and B toggles Banger Mode. Registered exactly once (see
   // the refs above for why) rather than depending on queue/pendingActionId/etc.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -271,13 +303,15 @@ export default function LiveQueueList({
         return;
       }
 
-      if (e.code !== "Space" && e.key !== "Enter" && e.key !== "Delete" && e.key !== "Backspace") return;
+      const isForScore = e.key.toLowerCase() === "f";
+      if (!isForScore && e.code !== "Space" && e.key !== "Enter" && e.key !== "Delete" && e.key !== "Backspace") return;
       e.preventDefault();
       const list = computeDisplayedQueue(queueRef.current, bangerModeRef.current, bangerKeysRef.current);
       if (list.length === 0) return;
       const target = list[Math.min(selectedIndexRef.current, list.length - 1)];
       if (!target || pendingActionIdRef.current === target.id) return;
-      if (e.key === "Delete" || e.key === "Backspace") handleDelete(target);
+      if (isForScore) void handleOpenInForScore(target);
+      else if (e.key === "Delete" || e.key === "Backspace") handleDelete(target);
       else handlePlayed(target);
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -296,6 +330,27 @@ export default function LiveQueueList({
           )}
         </div>
         <div className="flex items-center gap-3">
+          {forScoreNotice && (
+            <span className={`text-xs font-medium ${forScoreNotice.ok ? "text-success" : "text-danger"}`}>
+              {forScoreNotice.text}
+            </span>
+          )}
+          {midi.supported && midi.outputs.length > 1 && (
+            <label className="flex items-center gap-1.5 text-xs text-foreground-muted">
+              MIDI
+              <select
+                value={midi.selectedId ?? ""}
+                onChange={(e) => midi.selectOutput(e.target.value)}
+                className="max-w-32 rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-accent"
+              >
+                {midi.outputs.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="flex items-center gap-1.5 text-xs text-foreground-muted">
             Venue
             <select
@@ -322,6 +377,10 @@ export default function LiveQueueList({
           </span>
         </div>
       </div>
+
+      <p className="hidden sm:block text-xs text-foreground-muted -mt-2">
+        Arrows select · Space played · F forScore · Delete remove · B bangers
+      </p>
 
       {displayedQueue.length === 0 ? (
         <p className="text-foreground-muted text-center py-12">
@@ -352,65 +411,70 @@ export default function LiveQueueList({
                   ))}
                 </div>
               )}
-              <div className="p-4 flex flex-row sm:flex-col gap-3">
-                <div className="flex-1 min-w-0 flex flex-col gap-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex items-start gap-2">
-                      {item.tipAmountCents > 0 && (
-                        <span className="text-2xl leading-none shrink-0" aria-hidden>
-                          💰
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-lg font-semibold truncate">{item.songName}</p>
-                        <p className="text-foreground-muted truncate">{item.artistName}</p>
-                      </div>
-                    </div>
-                    {/* suppressHydrationWarning: locale/timezone-formatted time will
-                        legitimately differ between server render and the browser
-                        (e.g. server in one timezone, phone in another) — expected,
-                        not a bug. */}
-                    <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
-                      {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                    </p>
-                  </div>
-
-                  <div className="text-sm">
-                    <p>
-                      Requested by <span className="font-medium">{item.requesterName}</span>
-                      {item.otherRequesterCount > 0 &&
-                        ` and ${item.otherRequesterCount} other${item.otherRequesterCount === 1 ? "" : "s"}`}
-                    </p>
-                    {item.shoutOutRequesterNames.length > 0 && (
-                      <p className="text-tip font-medium">⭐ Shout-out for {item.shoutOutRequesterNames.join(", ")}</p>
-                    )}
+              <div className="p-4 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex items-start gap-2">
                     {item.tipAmountCents > 0 && (
-                      <p className="text-tip font-semibold mt-1">
-                        Tipped ${(item.tipAmountCents / 100).toFixed(2)}
-                        {item.otherRequesterCount > 0 && ` by ${item.requesterName}`}
-                      </p>
+                      <span className="text-2xl leading-none shrink-0" aria-hidden>
+                        💰
+                      </span>
                     )}
-                    {item.paymentStatus === "PENDING" && (
-                      <p className="text-xs text-foreground-muted mt-1">Tip payment in progress…</p>
-                    )}
+                    <div className="min-w-0">
+                      <p className="text-lg font-semibold truncate">{item.songName}</p>
+                      <p className="text-foreground-muted truncate">{item.artistName}</p>
+                    </div>
                   </div>
-
-                  <button
-                    onClick={() => handleDelete(item)}
-                    disabled={pendingActionId === item.id}
-                    className="self-start rounded-lg border border-danger/50 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
-                  >
-                    DELETE
-                  </button>
+                  {/* suppressHydrationWarning: locale/timezone-formatted time will
+                      legitimately differ between server render and the browser
+                      (e.g. server in one timezone, phone in another) — expected,
+                      not a bug. */}
+                  <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
+                    {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  </p>
                 </div>
 
-                <button
-                  onClick={() => handlePlayed(item)}
-                  disabled={pendingActionId === item.id}
-                  className="w-24 sm:w-full sm:h-9 shrink-0 rounded-xl bg-success text-background text-lg sm:text-sm font-bold disabled:opacity-50 flex items-center justify-center"
-                >
-                  PLAYED
-                </button>
+                <div className="text-sm">
+                  <p>
+                    Requested by <span className="font-medium">{item.requesterName}</span>
+                    {item.otherRequesterCount > 0 &&
+                      ` and ${item.otherRequesterCount} other${item.otherRequesterCount === 1 ? "" : "s"}`}
+                  </p>
+                  {item.shoutOutRequesterNames.length > 0 && (
+                    <p className="text-tip font-medium">⭐ Shout-out for {item.shoutOutRequesterNames.join(", ")}</p>
+                  )}
+                  {item.tipAmountCents > 0 && (
+                    <p className="text-tip font-semibold mt-1">
+                      Tipped ${(item.tipAmountCents / 100).toFixed(2)}
+                      {item.otherRequesterCount > 0 && ` by ${item.requesterName}`}
+                    </p>
+                  )}
+                  {item.paymentStatus === "PENDING" && (
+                    <p className="text-xs text-foreground-muted mt-1">Tip payment in progress…</p>
+                  )}
+                </div>
+
+                {/* Phone: two big buttons side by side. Laptop (sm+): a slim
+                    Played bar with a small forScore button — the keyboard
+                    (Space / F / Delete) is the main way to act there, and
+                    Delete is keyboard-only on purpose. */}
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                  <button
+                    onClick={() => void handleOpenInForScore(item)}
+                    disabled={forScorePrograms[bangerKey(item.songName, item.artistName)] === undefined}
+                    title="Open in forScore (F)"
+                    className="h-14 sm:h-9 sm:px-3 shrink-0 rounded-xl border border-accent text-accent text-lg sm:text-xs font-bold hover:bg-accent/10 disabled:opacity-30 disabled:hover:bg-transparent"
+                  >
+                    forScore
+                  </button>
+                  <button
+                    onClick={() => handlePlayed(item)}
+                    disabled={pendingActionId === item.id}
+                    title="Mark played (Space)"
+                    className="h-14 sm:h-9 sm:flex-1 rounded-xl bg-success text-background text-lg sm:text-sm font-bold disabled:opacity-50"
+                  >
+                    PLAYED
+                  </button>
+                </div>
               </div>
             </li>
           ))}

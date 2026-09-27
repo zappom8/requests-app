@@ -2,16 +2,26 @@ import { prisma } from "@/lib/prisma";
 import { getActiveSongDatabaseId, getCurrentVenueId } from "@/lib/settings";
 import { getAdminQueue } from "@/lib/queue";
 import { getBangerKeys } from "@/lib/bangers";
+import { bangerKey } from "@/lib/bangerKey";
 import LiveQueueList from "./LiveQueueList";
+
+// Lochie's forScore set list — the only library so far.
+const FORSCORE_LIBRARY = "Footdrums";
 
 // Always needs current queue state — never statically cached.
 export const dynamic = "force-dynamic";
 
 export default async function LiveQueuePage() {
-  const [activeSongDatabaseId, currentVenueId, venues] = await Promise.all([
+  const [activeSongDatabaseId, currentVenueId, venues, forScorePrograms] = await Promise.all([
     getActiveSongDatabaseId(),
     getCurrentVenueId(),
     prisma.venue.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    // Global by song name+artist (see ForScoreProgram), so this covers any
+    // song that can land in the queue regardless of the active database.
+    prisma.forScoreProgram.findMany({
+      where: { library: FORSCORE_LIBRARY },
+      select: { songName: true, artistName: true, program: true },
+    }),
   ]);
   const [queue, bangerKeys] = await Promise.all([
     activeSongDatabaseId ? getAdminQueue(activeSongDatabaseId) : Promise.resolve([]),
@@ -40,6 +50,9 @@ export default async function LiveQueuePage() {
         initialBangerKeys={bangerKeys}
         venues={venues}
         initialVenueId={currentVenueId}
+        forScorePrograms={Object.fromEntries(
+          forScorePrograms.map((p) => [bangerKey(p.songName, p.artistName), p.program]),
+        )}
       />
     </div>
   );
