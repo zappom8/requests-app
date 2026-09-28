@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { registerDevice, removeDevice } from "@/actions/devices";
+import { getShortcutToken, registerDevice, removeDevice } from "@/actions/devices";
 import {
   getLocalDeviceSnapshot,
   setLocalDevice,
@@ -78,12 +78,72 @@ function ThisDevice({ localDevice, onSaved }: { localDevice: LocalDevice | null;
   );
 }
 
+// The address an iPad Shortcut polls — see src/app/api/live-control/next.
+function ShortcutLink({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="space-y-1 rounded-lg bg-surface p-2 text-xs">
+      <p className="break-all font-mono">{url}</p>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(url).then(() => setCopied(true));
+        }}
+        className="rounded-md border border-border px-2 py-1 font-medium"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+      <span className="ml-2 text-foreground-muted">Keep it private — anyone with it can see what you send.</span>
+    </div>
+  );
+}
+
+// A receiver with no page of its own: an Apple Shortcut on the iPad polls
+// its link. Unlike Safari, Shortcuts opens forScore without asking.
+function AddShortcutReceiver({ onAdded }: { onAdded: (deviceId: string, token: string) => void }) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        try {
+          const result = await registerDevice({ deviceId: null, name, role: "forscore_receiver" });
+          setName("");
+          onAdded(result.deviceId, result.channelToken!);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Couldn't add it");
+        }
+      }}
+      className="flex gap-2"
+    >
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="New Shortcuts receiver, e.g. iPad Shortcut"
+        className={inputClass}
+      />
+      <button type="submit" disabled={!name.trim()} className="shrink-0 rounded-lg border border-border px-3 text-sm font-medium disabled:opacity-40">
+        Add
+      </button>
+      {error && <p className="text-sm text-danger">{error}</p>}
+    </form>
+  );
+}
+
 export default function ForScoreControl({ linkedTitles }: { linkedTitles: string[] }) {
   const control = useLiveControl();
   const localDeviceRaw = useSyncExternalStore(subscribeLocalDevice, getLocalDeviceSnapshot, () => null);
   const localDevice = localDeviceRaw ? (JSON.parse(localDeviceRaw) as LocalDevice) : null;
   const [testTitle, setTestTitle] = useState("");
   const [testSetlist, setTestSetlist] = useState("");
+  const [shortcutLink, setShortcutLink] = useState<{ deviceId: string; url: string } | null>(null);
+
+  function showShortcutLink(deviceId: string, token: string) {
+    setShortcutLink({ deviceId, url: `${window.location.origin}/api/live-control/next/${token}` });
+  }
 
   async function handleRemove(id: string, name: string) {
     if (!confirm(`Remove ${name}? It can be set up again from its receiver page.`)) return;
@@ -123,6 +183,16 @@ export default function ForScoreControl({ linkedTitles }: { linkedTitles: string
                 </label>
                 <button
                   type="button"
+                  onClick={async () => {
+                    if (shortcutLink?.deviceId === r.id) setShortcutLink(null);
+                    else showShortcutLink(r.id, await getShortcutToken(r.id));
+                  }}
+                  className="text-xs text-foreground-muted hover:text-foreground"
+                >
+                  Shortcut link
+                </button>
+                <button
+                  type="button"
                   onClick={() => void handleRemove(r.id, r.name)}
                   className="text-xs text-foreground-muted hover:text-danger"
                 >
@@ -132,6 +202,14 @@ export default function ForScoreControl({ linkedTitles }: { linkedTitles: string
             ))}
           </ul>
         )}
+        {shortcutLink && <ShortcutLink url={shortcutLink.url} />}
+        <AddShortcutReceiver
+          onAdded={(deviceId, token) => {
+            control.selectReceiver(deviceId);
+            showShortcutLink(deviceId, token);
+            void control.refresh();
+          }}
+        />
       </section>
 
       <section className="space-y-2 rounded-xl border border-accent/50 p-4">

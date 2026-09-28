@@ -75,6 +75,16 @@ export async function getReceiverChannel(deviceId: string) {
   return device ? { deviceName: device.name, channelToken: device.channelToken } : null;
 }
 
+// The secret address an iPad Shortcut polls (src/app/api/live-control/next).
+export async function getShortcutToken(deviceId: string) {
+  const performer = await requirePerformer();
+  const device = await prisma.performerDevice.findFirst({
+    where: { id: deviceId, performerId: performer.id, role: "forscore_receiver" },
+  });
+  if (!device) throw new Error("Device not found.");
+  return device.channelToken;
+}
+
 export async function deviceHeartbeat(deviceId: string) {
   const performer = await requirePerformer();
   const { count } = await prisma.performerDevice.updateMany({
