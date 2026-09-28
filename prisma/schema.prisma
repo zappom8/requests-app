@@ -46,6 +46,9 @@ model Performer {
   songPairingMembers SongPairingGroupMember[]
   songKeys           SongKey[]
   forScorePrograms   ForScoreProgram[]
+  forScoreLinks      ForScoreLink[]
+  devices            PerformerDevice[]
+  deviceCommands     DeviceCommand[]
   bookingInquiries   BookingInquiry[]
   settings           Settings?
   createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
@@ -198,6 +201,70 @@ model ForScoreProgram {
 
   @@unique([performerId, songName, artistName])
   @@unique([performerId, program])
+}
+
+// Which forScore score a song opens via forScore's URL scheme
+// (forscore://open?score=<title> — see src/lib/liveControl/forscoreUrl.ts),
+// the MIDI-free alternative to ForScoreProgram. The app's song title often
+// differs from the score's title in forScore, so this is an explicit,
+// editable mapping (dashboard/forscore). Per performer, global by song
+// name+artist, same reasoning as SongKey. filename, if set, is preferred by
+// forScore over title; setlist narrows the lookup to one setlist.
+model ForScoreLink {
+  id          String    @id @default(cuid())
+  performerId String
+  performer   Performer @relation(fields: [performerId], references: [id])
+  songName    String
+  artistName  String
+  title       String?
+  filename    String?
+  setlist     String?
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([performerId, songName, artistName])
+}
+
+// A browser (or, later, a native app) signed in as a performer that takes
+// part in live control — e.g. an iPhone "controller" and an iPad
+// "forscore_receiver". The id is kept in the device's localStorage.
+// channelToken is the secret Realtime Broadcast topic the receiver listens
+// on: only the server (which checks ownership before sending) and that
+// device ever learn it, so knowing a device id isn't enough to reach it.
+// lastSeenAt is bumped by the receiver's heartbeat while its Realtime
+// subscription is up — the controller's online/offline indicator.
+model PerformerDevice {
+  id           String          @id @default(cuid())
+  performerId  String
+  performer    Performer       @relation(fields: [performerId], references: [id])
+  name         String
+  role         String // 'controller' | 'forscore_receiver'
+  channelToken String          @unique
+  lastSeenAt   DateTime?       @db.Timestamptz(3)
+  commands     DeviceCommand[]
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@index([performerId, role])
+}
+
+// One live-control command sent to a device (id = the event's eventId).
+// Doubles as the debugging log, lets the controller see whether the
+// receiver acknowledged it (deliveredAt), and lets a receiver that briefly
+// lost its connection pick up a very recent command it missed. type is
+// generic ("forscore.open_score" today — see src/lib/liveControl/events.ts).
+model DeviceCommand {
+  id             String          @id @default(cuid())
+  performerId    String
+  performer      Performer       @relation(fields: [performerId], references: [id])
+  targetDeviceId String
+  targetDevice   PerformerDevice @relation(fields: [targetDeviceId], references: [id], onDelete: Cascade)
+  sourceDeviceId String?
+  type           String
+  payload        Json
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  deliveredAt    DateTime?       @db.Timestamptz(3)
+
+  @@index([targetDeviceId, createdAt])
 }
 
 // The partial index that keeps Live Queue reads fast regardless of history

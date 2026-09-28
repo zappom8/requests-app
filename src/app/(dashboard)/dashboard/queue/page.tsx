@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LiveQueuePage() {
   const performer = await getCurrentPerformer();
-  const [activeSongDatabaseId, currentVenueId, venues, forScorePrograms] = await Promise.all([
+  const [activeSongDatabaseId, currentVenueId, venues, forScorePrograms, forScoreLinks] = await Promise.all([
     getActiveSongDatabaseId(performer.id),
     getCurrentVenueId(performer.id),
     prisma.venue.findMany({
@@ -25,6 +25,11 @@ export default async function LiveQueuePage() {
     prisma.forScoreProgram.findMany({
       where: { performerId: performer.id },
       select: { songName: true, artistName: true, program: true },
+    }),
+    // Same, for opening scores on the iPad receiver by title (no MIDI).
+    prisma.forScoreLink.findMany({
+      where: { performerId: performer.id, OR: [{ title: { not: null } }, { filename: { not: null } }] },
+      select: { songName: true, artistName: true, title: true, filename: true, setlist: true },
     }),
   ]);
   const [queue, bangerKeys] = await Promise.all([
@@ -56,6 +61,12 @@ export default async function LiveQueuePage() {
         initialVenueId={currentVenueId}
         forScorePrograms={Object.fromEntries(
           forScorePrograms.map((p) => [bangerKey(p.songName, p.artistName), p.program]),
+        )}
+        forScoreLinks={Object.fromEntries(
+          forScoreLinks.map((l) => [
+            bangerKey(l.songName, l.artistName),
+            { title: l.title, filename: l.filename, setlist: l.setlist },
+          ]),
         )}
       />
     </div>

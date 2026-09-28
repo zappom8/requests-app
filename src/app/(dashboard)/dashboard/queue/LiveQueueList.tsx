@@ -8,9 +8,11 @@ import { setCurrentVenue } from "@/actions/venues";
 import { activateBangerMode } from "@/actions/bangers";
 import { bangerKey } from "@/lib/bangerKey";
 import { useMidiOutput } from "@/lib/useMidiOutput";
+import { useLiveControl } from "@/lib/liveControl/useLiveControl";
 
 type SerializedItem = Omit<AdminQueueItem, "requestedAt"> & { requestedAt: string };
 type Venue = { id: string; name: string };
+type ForScoreLink = { title: string | null; filename: string | null; setlist: string | null };
 
 const FALLBACK_POLL_MS = 30000;
 // Marking several songs played in quick succession fires one broadcast per
@@ -30,6 +32,7 @@ export default function LiveQueueList({
   venues,
   initialVenueId,
   forScorePrograms,
+  forScoreLinks,
 }: {
   initialQueue: SerializedItem[];
   songDatabaseId: string;
@@ -39,6 +42,9 @@ export default function LiveQueueList({
   // bangerKey(songName, artistName) -> the MIDI Program Change whose
   // forScore "Open" command opens that song's chart (channel 1).
   forScorePrograms: Record<string, number>;
+  // bangerKey(songName, artistName) -> the score to open by title on the
+  // performer's iPad forScore receiver (no MIDI; see /dashboard/forscore).
+  forScoreLinks: Record<string, ForScoreLink>;
 }) {
   const [queue, setQueueState] = useState(initialQueue);
   const [bangerKeys, setBangerKeysState] = useState(new Set(initialBangerKeys));
@@ -52,6 +58,13 @@ export default function LiveQueueList({
   // once-registered keydown listener below never goes stale; likewise
   // forScorePrograms is fixed for the page's lifetime.
   const midi = useMidiOutput();
+  // Unlike midi, its send closes over state — read through a ref from the
+  // once-registered keydown listener so it never goes stale.
+  const liveControl = useLiveControl();
+  const liveControlRef = useRef(liveControl);
+  useEffect(() => {
+    liveControlRef.current = liveControl;
+  });
   const refetchSeq = useRef(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // One entry per currently-rendered card, in display order — measured to
@@ -230,13 +243,23 @@ export default function LiveQueueList({
     forScoreNoticeTimer.current = setTimeout(() => setForScoreNotice(null), FORSCORE_NOTICE_MS);
   }
 
-  // Sends the song's Program Change on channel 1 — matching the raw "C0 xx"
-  // Open command stored against each score in the forScore set list.
+  // Prefers the iPad receiver (opens the score by its forScore title) when
+  // this performer has one set up and the song is linked; otherwise sends
+  // the song's Program Change on channel 1 — matching the raw "C0 xx" Open
+  // command stored against each score in the forScore set list.
   async function handleOpenInForScore(item: SerializedItem) {
     syncSelectionToItem(item);
-    const program = forScorePrograms[bangerKey(item.songName, item.artistName)];
+    const key = bangerKey(item.songName, item.artistName);
+    const link = forScoreLinks[key];
+    const program = forScorePrograms[key];
+    const control = liveControlRef.current;
+    if (link && (control.receivers.length > 0 || program === undefined)) {
+      setForScoreNotice(null);
+      await control.openScore({ ...link, songName: item.songName, artistName: item.artistName });
+      return;
+    }
     if (program === undefined) {
-      showForScoreNotice(`No forScore number for ${item.songName}`, false);
+      showForScoreNotice("No forScore score has been linked to this song yet.", false);
       return;
     }
     const sentTo = await midi.send([0xc0, program]);
@@ -330,6 +353,27 @@ export default function LiveQueueList({
           )}
         </div>
         <div className="flex items-center gap-3">
+          {liveControl.notice && !forScoreNotice && (
+            <span
+              className={`text-xs font-medium ${
+                liveControl.notice.tone === "ok"
+                  ? "text-success"
+                  : liveControl.notice.tone === "error"
+                    ? "text-danger"
+                    : "text-foreground-muted"
+              }`}
+            >
+              {liveControl.notice.text}
+            </span>
+          )}
+          {!liveControl.notice && liveControl.selected && (
+            <span className="text-xs text-foreground-muted" title="forScore receiver (change on the forScore page)">
+              → {liveControl.selected.name}{" "}
+              <span className={liveControl.selected.online ? "text-success" : ""}>
+                {liveControl.selected.online ? "●" : "○"}
+              </span>
+            </span>
+          )}
           {forScoreNotice && (
             <span className={`text-xs font-medium ${forScoreNotice.ok ? "text-success" : "text-danger"}`}>
               {forScoreNotice.text}
@@ -472,7 +516,10 @@ export default function LiveQueueList({
                 <div className="grid grid-cols-2 gap-2 sm:flex">
                   <button
                     onClick={() => void handleOpenInForScore(item)}
-                    disabled={forScorePrograms[bangerKey(item.songName, item.artistName)] === undefined}
+                    disabled={
+                      forScorePrograms[bangerKey(item.songName, item.artistName)] === undefined &&
+                      !forScoreLinks[bangerKey(item.songName, item.artistName)]
+                    }
                     title="Open in forScore (F)"
                     className="h-14 sm:h-9 sm:px-3 shrink-0 rounded-xl border border-accent text-accent text-lg sm:text-xs font-bold hover:bg-accent/10 disabled:opacity-30 disabled:hover:bg-transparent"
                   >

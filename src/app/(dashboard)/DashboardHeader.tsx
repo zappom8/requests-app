@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/pairings", label: "Song Pairings" },
   { href: "/dashboard/bangers", label: "Bangers" },
   { href: "/dashboard/keys", label: "Keys" },
+  { href: "/dashboard/forscore", label: "forScore" },
   { href: "/dashboard/history", label: "Request History" },
   { href: "/dashboard/bookings", label: "Bookings" },
   { href: "/dashboard/payments", label: "Tips & Payments" },
@@ -19,7 +20,8 @@ const NAV_ITEMS = [
   { href: "/dashboard/settings", label: "Settings" },
 ];
 
-const HIDDEN_ON = ["/dashboard/login", "/dashboard/set-password", "/dashboard/no-access"];
+// The forScore receiver sits in a tiny Safari window on the iPad — no chrome.
+const HIDDEN_ON = ["/dashboard/login", "/dashboard/set-password", "/dashboard/no-access", "/dashboard/forscore-receiver"];
 
 export default function DashboardHeader({ performerName }: { performerName: string | null }) {
   const pathname = usePathname();

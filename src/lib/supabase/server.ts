@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { deviceChannelName, LIVE_COMMAND_EVENT, type LiveCommandEvent } from "@/lib/liveControl/events";
 
 // Server-side client — secret key, never exposed to the browser. Used to
 // send Realtime Broadcast messages after a mutation.
@@ -59,6 +60,17 @@ export async function broadcastQueueChanged(songDatabaseId: string) {
   const supabase = getSupabaseServerClient();
   const channel = supabase.channel(queueChannelName(songDatabaseId));
   await channel.send({ type: "broadcast", event: "queue-changed", payload: {} });
+}
+
+// Live-control command to one device's secret topic (see PerformerDevice).
+// Unlike the queue ping this carries the command itself — it contains no
+// private data, and receivers need it without a round trip to act fast.
+export async function broadcastDeviceCommand(channelToken: string, event: LiveCommandEvent) {
+  const supabase = getSupabaseServerClient();
+  const channel = supabase.channel(deviceChannelName(channelToken));
+  const result = await channel.send({ type: "broadcast", event: LIVE_COMMAND_EVENT, payload: event });
+  await supabase.removeChannel(channel);
+  if (result !== "ok") throw new Error(`Realtime broadcast failed (${result})`);
 }
 
 export { queueChannelName };
