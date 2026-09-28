@@ -1,13 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCommandStatus, listReceivers, sendDeviceCommand, type ReceiverSummary } from "@/actions/devices";
-import { getLocalDevice, getSelectedReceiverId, setSelectedReceiverId } from "./localDevice";
+import {
+  getCommandStatus,
+  listReceivers,
+  sendDeviceCommand,
+  setForScoreReceiver,
+  type ReceiverSummary,
+} from "@/actions/devices";
+import { getLocalDevice } from "./localDevice";
 import type { CommandPayloads } from "./events";
 
 // Controller side of live score control: the performer's forScore
-// receivers with online/offline state, the one this browser sends to
-// (remembered in localStorage), and send-with-feedback.
+// receivers with online/offline state, the one every controller sends to
+// (an account-wide setting, chosen on the Settings page), and
+// send-with-feedback.
 
 const RECEIVER_REFRESH_MS = 20_000;
 const CONFIRM_POLL_MS = 400;
@@ -26,9 +33,9 @@ export function useLiveControl() {
   const refresh = useCallback(
     () =>
       listReceivers()
-        .then((list) => {
-          setReceivers(list);
-          setSelectedIdState((current) => current ?? getSelectedReceiverId());
+        .then((state) => {
+          setReceivers(state.receivers);
+          setSelectedIdState(state.selectedId);
           setLoaded(true);
         })
         // offline or signed out — keep showing the last known list
@@ -51,13 +58,13 @@ export function useLiveControl() {
     };
   }, [refresh]);
 
-  // Remembered receiver if it still exists, else the only one there is.
+  // The chosen receiver if it still exists, else the only one there is.
   const selected =
     receivers.find((r) => r.id === selectedId) ?? (receivers.length === 1 ? receivers[0] : null);
 
-  function selectReceiver(id: string | null) {
-    setSelectedReceiverId(id);
+  async function selectReceiver(id: string | null) {
     setSelectedIdState(id);
+    await setForScoreReceiver(id);
   }
 
   function showNotice(next: LiveControlNotice, clearAfterMs: number | null) {
@@ -77,7 +84,7 @@ export function useLiveControl() {
           text:
             receivers.length === 0
               ? "No forScore receiver is currently connected."
-              : "Choose which forScore receiver to send to (forScore page).",
+              : "Choose your forScore receiver on the Settings page.",
           tone: "error",
         },
         5000,

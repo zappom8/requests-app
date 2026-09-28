@@ -27,6 +27,7 @@ const ONLINE_WINDOW_MS = 75_000;
 const CATCH_UP_WINDOW_MS = 30_000;
 
 export type ReceiverSummary = { id: string; name: string; online: boolean; lastSeenAt: string | null };
+export type ReceiverState = { receivers: ReceiverSummary[]; selectedId: string | null };
 
 function isOnline(lastSeenAt: Date | null) {
   return !!lastSeenAt && Date.now() - lastSeenAt.getTime() < ONLINE_WINDOW_MS;
@@ -94,18 +95,42 @@ export async function deviceHeartbeat(deviceId: string) {
   if (count === 0) throw new Error("Device not found.");
 }
 
-export async function listReceivers(): Promise<ReceiverSummary[]> {
+// The performer's receivers, plus the one every controller sends to
+// (Settings.forScoreReceiverId — one choice for the whole account, made on
+// the Settings page).
+export async function listReceivers(): Promise<ReceiverState> {
   const performer = await requirePerformer();
-  const devices = await prisma.performerDevice.findMany({
-    where: { performerId: performer.id, role: "forscore_receiver" },
-    orderBy: { name: "asc" },
+  const [devices, settings] = await Promise.all([
+    prisma.performerDevice.findMany({
+      where: { performerId: performer.id, role: "forscore_receiver" },
+      orderBy: { name: "asc" },
+    }),
+    prisma.settings.findUnique({ where: { performerId: performer.id }, select: { forScoreReceiverId: true } }),
+  ]);
+  return {
+    receivers: devices.map((d) => ({
+      id: d.id,
+      name: d.name,
+      online: isOnline(d.lastSeenAt),
+      lastSeenAt: d.lastSeenAt?.toISOString() ?? null,
+    })),
+    selectedId: settings?.forScoreReceiverId ?? null,
+  };
+}
+
+export async function setForScoreReceiver(deviceId: string | null) {
+  const performer = await requirePerformer();
+  if (deviceId) {
+    const count = await prisma.performerDevice.count({
+      where: { id: deviceId, performerId: performer.id, role: "forscore_receiver" },
+    });
+    if (count === 0) throw new Error("Device not found.");
+  }
+  await prisma.settings.upsert({
+    where: { performerId: performer.id },
+    create: { performerId: performer.id, forScoreReceiverId: deviceId },
+    update: { forScoreReceiverId: deviceId },
   });
-  return devices.map((d) => ({
-    id: d.id,
-    name: d.name,
-    online: isOnline(d.lastSeenAt),
-    lastSeenAt: d.lastSeenAt?.toISOString() ?? null,
-  }));
 }
 
 export async function removeDevice(deviceId: string) {

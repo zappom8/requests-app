@@ -367,7 +367,7 @@ export default function LiveQueueList({
             </span>
           )}
           {!liveControl.notice && liveControl.selected && (
-            <span className="text-xs text-foreground-muted" title="forScore receiver (change on the forScore page)">
+            <span className="text-xs text-foreground-muted" title="forScore receiver (change in Settings)">
               → {liveControl.selected.name}{" "}
               <span className={liveControl.selected.online ? "text-success" : ""}>
                 {liveControl.selected.online ? "●" : "○"}

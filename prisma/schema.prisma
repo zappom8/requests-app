@@ -360,6 +360,11 @@ model Settings {
   // string, no relation, same convention as activeSongDatabaseId (deleting
   // the venue just leaves this pointing at nothing, harmlessly).
   currentVenueId              String?
+  // Which PerformerDevice (a forScore receiver — an iPad/iPhone running
+  // the Shortcut) the forScore button sends to, from every controller. Plain
+  // string like currentVenueId; a deleted device just falls back to "the
+  // only receiver", if there's exactly one.
+  forScoreReceiverId          String?
   bio                         String?
   photoUrl                    String?
   logoUrl                     String?

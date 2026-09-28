@@ -2,6 +2,7 @@ import { getSettings } from "@/lib/settings";
 import { getCurrentPerformer } from "@/lib/auth";
 import { updateSettings } from "@/actions/settings";
 import ImageUploadForm from "./ImageUploadForm";
+import ForScoreReceiverSettings from "./ForScoreReceiverSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ export default async function SettingsPage() {
           <ImageUploadForm field="logoUrl" label="Logo" currentUrl={settings?.logoUrl ?? null} />
         </div>
       </div>
+
+      <ForScoreReceiverSettings />
 
       <form action={updateSettings} className="rounded-lg border border-border bg-surface p-4 space-y-4">
         <h2 className="text-sm font-medium">Profile</h2>

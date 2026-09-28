@@ -36,9 +36,8 @@ export default async function ForScorePage() {
       <div>
         <h1 className="text-xl font-semibold mb-1">forScore Remote</h1>
         <p className="text-sm text-foreground-muted">
-          Open scores in forScore on your iPad from this phone, with no MIDI. The iPad runs the{" "}
-          <span className="font-medium text-foreground">receiver page</span> in Safari next to forScore in Stage
-          Manager; this page picks which iPad to send to.
+          Open scores in forScore on your iPad or iPhone from the Live Queue, with no MIDI. The device running
+          forScore runs the forScore Receiver shortcut; choose it in Settings.
         </p>
       </div>
 
