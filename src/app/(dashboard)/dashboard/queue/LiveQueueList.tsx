@@ -322,7 +322,11 @@ export default function LiveQueueList({
         else if (e.key === "ArrowLeft") next = current - 1;
         else if (e.key === "ArrowDown") next = current + columns;
         else if (e.key === "ArrowUp") next = current - columns;
-        setSelectedIndex(Math.max(0, Math.min(next, list.length - 1)));
+        const clamped = Math.max(0, Math.min(next, list.length - 1));
+        setSelectedIndex(clamped);
+        // preventDefault above stops the arrows scrolling the page, so keep
+        // the selected card in view ourselves (no-op if it's already visible).
+        itemRefs.current[clamped]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
         return;
       }
 
