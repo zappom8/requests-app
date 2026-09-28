@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const WAIT_MS = 20_000;
-const CHECK_EVERY_MS = 300;
+const CHECK_EVERY_MS = 150;
 // Same freshness rule as getMissedCommands: never open a stale score.
 const FRESH_MS = 30_000;
 
