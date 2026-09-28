@@ -247,15 +247,46 @@ export default function LiveQueueList({
   // this performer has one set up and the song is linked; otherwise sends
   // the song's Program Change on channel 1 — matching the raw "C0 xx" Open
   // command stored against each score in the forScore set list.
+  // Which song of each card's pairing group was last opened in forScore:
+  // 0 = the requested song, 1+ = item.linkedSongs[n - 1]. Drives L's cycling
+  // and the highlight in the "Also cues" strip. A ref too, for the
+  // once-registered keydown listener.
+  const [forScorePos, setForScorePosState] = useState<Record<string, number>>({});
+  const forScorePosRef = useRef<Record<string, number>>({});
+  function setForScorePos(itemId: string, pos: number) {
+    forScorePosRef.current = { ...forScorePosRef.current, [itemId]: pos };
+    setForScorePosState(forScorePosRef.current);
+  }
+
   async function handleOpenInForScore(item: SerializedItem) {
     syncSelectionToItem(item);
-    const key = bangerKey(item.songName, item.artistName);
+    setForScorePos(item.id, 0);
+    await openSongInForScore(item.songName, item.artistName);
+  }
+
+  // L: the next song in the card's pairing group, wrapping back round to the
+  // requested song — e.g. Angels → I'm Gonna Be → Sex on Fire → Angels.
+  // Or a specific one, when a song in the "Also cues" strip is clicked.
+  async function handleOpenLinked(item: SerializedItem, pos?: number) {
+    syncSelectionToItem(item);
+    const group = [{ songName: item.songName, artistName: item.artistName }, ...item.linkedSongs];
+    if (group.length === 1) {
+      showForScoreNotice(`${item.songName} has no paired songs`, false);
+      return;
+    }
+    const next = pos ?? ((forScorePosRef.current[item.id] ?? 0) + 1) % group.length;
+    setForScorePos(item.id, next);
+    await openSongInForScore(group[next].songName, group[next].artistName);
+  }
+
+  async function openSongInForScore(songName: string, artistName: string) {
+    const key = bangerKey(songName, artistName);
     const link = forScoreLinks[key];
     const program = forScorePrograms[key];
     const control = liveControlRef.current;
     if (link && (control.receivers.length > 0 || program === undefined)) {
       setForScoreNotice(null);
-      await control.openScore({ ...link, songName: item.songName, artistName: item.artistName });
+      await control.openScore({ ...link, songName, artistName });
       return;
     }
     if (program === undefined) {
@@ -263,7 +294,7 @@ export default function LiveQueueList({
       return;
     }
     const sentTo = await midi.send([0xc0, program]);
-    if (sentTo) showForScoreNotice(`Opened ${item.songName} in forScore`, true);
+    if (sentTo) showForScoreNotice(`Opened ${songName} in forScore`, true);
     else showForScoreNotice("No MIDI output — check the iPad connection", false);
   }
 
@@ -331,13 +362,15 @@ export default function LiveQueueList({
       }
 
       const isForScore = e.key.toLowerCase() === "f";
-      if (!isForScore && e.code !== "Space" && e.key !== "Enter" && e.key !== "Delete" && e.key !== "Backspace") return;
+      const isLinked = e.key.toLowerCase() === "l";
+      if (!isForScore && !isLinked && e.code !== "Space" && e.key !== "Enter" && e.key !== "Delete" && e.key !== "Backspace") return;
       e.preventDefault();
       const list = computeDisplayedQueue(queueRef.current, bangerModeRef.current, bangerKeysRef.current);
       if (list.length === 0) return;
       const target = list[Math.min(selectedIndexRef.current, list.length - 1)];
       if (!target || pendingActionIdRef.current === target.id) return;
       if (isForScore) void handleOpenInForScore(target);
+      else if (isLinked) void handleOpenLinked(target);
       else if (e.key === "Delete" || e.key === "Backspace") handleDelete(target);
       else handlePlayed(target);
     }
@@ -427,7 +460,7 @@ export default function LiveQueueList({
       </div>
 
       <p className="hidden sm:block text-xs text-foreground-muted -mt-2">
-        Arrows select · Space played · F forScore · Delete remove · B bangers
+        Arrows select · Space played · F forScore · L next paired song · Delete remove · B bangers
       </p>
 
       {displayedQueue.length === 0 ? (
@@ -453,9 +486,23 @@ export default function LiveQueueList({
                 <div className="flex flex-wrap items-center gap-1.5 bg-accent/15 px-4 py-1.5 text-xs font-medium text-accent-hover">
                   <span>🔗 Also cues:</span>
                   {item.linkedSongs.map((s, i) => (
-                    <span key={i} className="rounded-full bg-accent/20 px-2 py-0.5">
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleOpenLinked(item, i + 1);
+                      }}
+                      title="Open in forScore (L cycles)"
+                      className={`rounded-full px-2 py-0.5 ${
+                        forScorePos[item.id] === i + 1
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-accent/20 hover:bg-accent/30"
+                      }`}
+                    >
+                      {forScorePos[item.id] === i + 1 && "▶ "}
                       {s.songName} — {s.artistName}
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
