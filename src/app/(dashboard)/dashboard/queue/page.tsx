@@ -9,7 +9,7 @@ import LiveQueueList from "./LiveQueueList";
 
 
 // The guitar pad's helper (~/LOOPER) finds this window by its title.
-export const metadata: Metadata = { title: "Live Queue" };
+export const metadata: Metadata = { title: "OPERATOR · Live Queue" };
 
 // Always needs current queue state — never statically cached.
 export const dynamic = "force-dynamic";
