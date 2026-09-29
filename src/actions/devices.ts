@@ -62,7 +62,7 @@ export async function registerDevice(input: { deviceId: string | null; name: str
     deviceId: device.id,
     deviceName: device.name,
     deviceRole: device.role as DeviceRole,
-    channelToken: device.role === "forscore_receiver" ? device.channelToken : null,
+    channelToken: device.role === "controller" ? null : device.channelToken,
   };
 }
 
@@ -76,11 +76,12 @@ export async function getReceiverChannel(deviceId: string) {
   return device ? { deviceName: device.name, channelToken: device.channelToken } : null;
 }
 
-// The secret address an iPad Shortcut polls (src/app/api/live-control/next).
+// The secret address an iPad Shortcut (or the laptop's Ableton helper) polls
+// (src/app/api/live-control/next).
 export async function getShortcutToken(deviceId: string) {
   const performer = await requirePerformer();
   const device = await prisma.performerDevice.findFirst({
-    where: { id: deviceId, performerId: performer.id, role: "forscore_receiver" },
+    where: { id: deviceId, performerId: performer.id, role: { in: ["forscore_receiver", "ableton_receiver"] } },
   });
   if (!device) throw new Error("Device not found.");
   return device.channelToken;
@@ -191,6 +192,51 @@ export async function sendDeviceCommand(input: {
     return { ok: false, error: "Couldn't reach the realtime service — try again." };
   }
   return { ok: true, eventId: command.id, deviceName: target.name, online: isOnline(target.lastSeenAt) };
+}
+
+// Ableton receivers (the laptop's guitar-pad helper). Unlike forScore there's
+// no "which one" choice: every Ableton receiver gets every cue — in
+// practice there's one, the gig laptop.
+export async function listAbletonReceivers(): Promise<ReceiverSummary[]> {
+  const performer = await requirePerformer();
+  const devices = await prisma.performerDevice.findMany({
+    where: { performerId: performer.id, role: "ableton_receiver" },
+    orderBy: { name: "asc" },
+  });
+  return devices.map((d) => ({
+    id: d.id,
+    name: d.name,
+    online: isOnline(d.lastSeenAt),
+    lastSeenAt: d.lastSeenAt?.toISOString() ?? null,
+  }));
+}
+
+// Cues a song's scene in Ableton. The receivers long-poll for it, so there's
+// nothing to broadcast. Fire-and-forget from the Live Queue: returns
+// whether any Ableton receiver exists rather than throwing.
+export async function cueAbletonScene(input: { action: "select" | "launch"; songName: string; artistName: string }) {
+  const performer = await requirePerformer();
+  let payload;
+  try {
+    payload = validatePayload("ableton.cue_scene", input);
+  } catch {
+    return { ok: false as const };
+  }
+  const receivers = await prisma.performerDevice.findMany({
+    where: { performerId: performer.id, role: "ableton_receiver" },
+    select: { id: true },
+  });
+  if (receivers.length === 0) return { ok: false as const };
+  await prisma.deviceCommand.createMany({
+    data: receivers.map((r) => ({
+      performerId: performer.id,
+      targetDeviceId: r.id,
+      sourceDeviceId: null,
+      type: "ableton.cue_scene",
+      payload: payload as Prisma.InputJsonValue,
+    })),
+  });
+  return { ok: true as const };
 }
 
 // Receiver -> server: "I got it". Lets the controller confirm delivery.

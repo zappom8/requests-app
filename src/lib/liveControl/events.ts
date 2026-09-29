@@ -2,12 +2,14 @@
 // and every receiver. Kept independent of Safari/React so a PWA or a native
 // iPad app can receive exactly the same JSON later.
 //
-// Only "forscore.open_score" exists today. Future commands (forscore page
+// "forscore.open_score" and "ableton.cue_scene" exist today. Future commands (forscore page
 // turns, keyboard/guitar patches, TouchDesigner scenes, MIDI/OSC, ...) are
 // added by extending CommandPayloads and validatePayload below — nothing
 // about the transport, device registry or command log needs to change.
 
-export const DEVICE_ROLES = ["controller", "forscore_receiver"] as const;
+// ableton_receiver: the laptop's guitar-pad helper (~/LOOPER), which polls
+// /api/live-control/next and cues the song's scene in Ableton Live.
+export const DEVICE_ROLES = ["controller", "forscore_receiver", "ableton_receiver"] as const;
 export type DeviceRole = (typeof DEVICE_ROLES)[number];
 
 export type CommandPayloads = {
@@ -18,6 +20,12 @@ export type CommandPayloads = {
     title: string;
     filename: string | null;
     setlist: string | null;
+  };
+  // Select (or select and launch) the Ableton scene named "Song — Artist".
+  "ableton.cue_scene": {
+    action: "select" | "launch";
+    songName: string;
+    artistName: string;
   };
 };
 export type CommandType = keyof CommandPayloads;
@@ -62,11 +70,21 @@ export function validatePayload<T extends CommandType>(type: T, raw: unknown): C
         setlist: optionalString(input.setlist),
       } as CommandPayloads[T];
     }
+    case "ableton.cue_scene": {
+      const songName = optionalString(input.songName);
+      const artistName = optionalString(input.artistName);
+      if (!songName || !artistName) throw new Error("A song and artist are required.");
+      return {
+        action: input.action === "launch" ? "launch" : "select",
+        songName,
+        artistName,
+      } as CommandPayloads[T];
+    }
     default:
       throw new Error(`Unknown command type: ${String(type)}`);
   }
 }
 
 export function isCommandType(value: unknown): value is CommandType {
-  return value === "forscore.open_score";
+  return value === "forscore.open_score" || value === "ableton.cue_scene";
 }

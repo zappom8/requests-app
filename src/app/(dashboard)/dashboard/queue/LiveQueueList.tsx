@@ -9,6 +9,8 @@ import { activateBangerMode } from "@/actions/bangers";
 import { bangerKey } from "@/lib/bangerKey";
 import { useMidiOutput } from "@/lib/useMidiOutput";
 import { useLiveControl } from "@/lib/liveControl/useLiveControl";
+import { cueAbletonScene } from "@/actions/devices";
+import SetlistPanel, { type SetlistDatabase, type SetlistHandle } from "./SetlistPanel";
 
 type SerializedItem = Omit<AdminQueueItem, "requestedAt"> & { requestedAt: string };
 type Venue = { id: string; name: string };
@@ -33,7 +35,10 @@ export default function LiveQueueList({
   initialVenueId,
   forScorePrograms,
   forScoreLinks,
+  setlistDatabases,
 }: {
+  // Every song database, for the Setlist view.
+  setlistDatabases: SetlistDatabase[];
   initialQueue: SerializedItem[];
   songDatabaseId: string;
   initialBangerKeys: string[];
@@ -101,6 +106,16 @@ export default function LiveQueueList({
   // un-done by a refetch that simply hasn't caught up yet.
   const pendingRemovals = useRef<Set<string>>(new Set());
   const selectedIndexRef = useRef(selectedIndex);
+
+  // Queue (requests) or Setlist (the whole song list). Q / S switch — the
+  // guitar pad's mode key types those — and keys act on whichever is showing.
+  const [view, setViewState] = useState<"queue" | "setlist">("queue");
+  const viewRef = useRef(view);
+  function setView(next: "queue" | "setlist") {
+    viewRef.current = next;
+    setViewState(next);
+  }
+  const setlistRef = useRef<SetlistHandle>(null);
 
   function setSelectedIndex(next: number) {
     selectedIndexRef.current = next;
@@ -280,6 +295,9 @@ export default function LiveQueueList({
   }
 
   async function openSongInForScore(songName: string, artistName: string) {
+    // Whatever song goes up in forScore, Ableton follows to its scene (if the
+    // laptop's pad helper is registered as an Ableton receiver in Settings).
+    void cueAbletonScene({ action: "select", songName, artistName }).catch(() => {});
     const key = bangerKey(songName, artistName);
     const link = forScoreLinks[key];
     const program = forScorePrograms[key];
@@ -322,6 +340,26 @@ export default function LiveQueueList({
       const active = document.activeElement;
       const tag = active instanceof HTMLElement ? active.tagName : "";
       if (tag === "SELECT" || tag === "INPUT" || tag === "TEXTAREA") return;
+
+      const key = e.key.toLowerCase();
+      if (key === "q" || key === "s") {
+        e.preventDefault();
+        setView(key === "q" ? "queue" : "setlist");
+        return;
+      }
+      // Setlist view: arrows scroll, F / Enter choose. Queue-only keys
+      // (Space played, Delete, B, L) do nothing here, so a stray press
+      // can never mark a request played while browsing the setlist.
+      if (viewRef.current === "setlist") {
+        const setlist = setlistRef.current;
+        if (!setlist) return;
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") setlist.move(1);
+        else if (e.key === "ArrowUp" || e.key === "ArrowLeft") setlist.move(-1);
+        else if (key === "f" || e.key === "Enter") setlist.choose();
+        else return;
+        e.preventDefault();
+        return;
+      }
 
       if (e.key.toLowerCase() === "b") {
         e.preventDefault();
@@ -383,6 +421,21 @@ export default function LiveQueueList({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">Live Queue</h1>
+          <div className="flex rounded-lg border border-border p-0.5 text-xs font-medium">
+            {(["queue", "setlist"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                title={v === "queue" ? "Requests (Q)" : "Whole setlist (S)"}
+                className={`rounded-md px-3 py-1 ${
+                  view === v ? "bg-accent text-accent-foreground" : "text-foreground-muted hover:text-foreground"
+                }`}
+              >
+                {v === "queue" ? "Queue" : "Setlist"}
+              </button>
+            ))}
+          </div>
           {bangerMode && (
             <span className="rounded-full bg-tip/20 px-3 py-1 text-xs font-bold text-tip">
               🔥 BANGER MODE — press B to exit
@@ -460,10 +513,19 @@ export default function LiveQueueList({
       </div>
 
       <p className="hidden sm:block text-xs text-foreground-muted -mt-2">
-        Arrows select · Space played · F forScore · L next paired song · Delete remove · B bangers
+        {view === "queue"
+          ? "Arrows select · Space played · F forScore + Ableton · L next paired song · Delete remove · B bangers · S setlist"
+          : "Arrows scroll · F or Enter choose (forScore + Ableton) · Q back to requests"}
       </p>
 
-      {displayedQueue.length === 0 ? (
+      {view === "setlist" ? (
+        <SetlistPanel
+          ref={setlistRef}
+          databases={setlistDatabases}
+          defaultDatabaseId={songDatabaseId}
+          onChoose={(songName, artistName) => void openSongInForScore(songName, artistName)}
+        />
+      ) : displayedQueue.length === 0 ? (
         <p className="text-foreground-muted text-center py-12">
           {bangerMode ? "No bangers in the queue right now." : "Queue is empty."}
         </p>

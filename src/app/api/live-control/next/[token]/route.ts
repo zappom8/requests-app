@@ -14,6 +14,9 @@ import type { CommandPayloads } from "@/lib/liveControl/events";
 // a Shortcut has no session — so the device's secret channelToken in the
 // path is the credential, the same secret the Safari receiver listens on.
 // Each poll also counts as the device's heartbeat (online/offline).
+//
+// The laptop's Ableton helper (an ableton_receiver) polls this same route
+// for "ableton.cue_scene" commands.
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -50,7 +53,9 @@ function text(body: string, status = 200) {
 export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const device = await prisma.performerDevice.findUnique({ where: { channelToken: token } });
-  if (!device || device.role !== "forscore_receiver") return text("Unknown receiver", 404);
+  if (!device || (device.role !== "forscore_receiver" && device.role !== "ableton_receiver")) {
+    return text("Unknown receiver", 404);
+  }
 
   await prisma.performerDevice.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } });
   const waitParam = new URL(request.url).searchParams.get("wait");
@@ -60,8 +65,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   while (!request.signal.aborted) {
     const command = await claimNextCommand(device.id);
     if (command) {
-      if (command.type === "forscore.open_score") {
+      if (command.type === "forscore.open_score" && device.role === "forscore_receiver") {
         return text(buildForScoreOpenUrl(command.payload as CommandPayloads["forscore.open_score"]));
+      }
+      // The Ableton helper gets "select|launch<TAB>Song<TAB>Artist".
+      if (command.type === "ableton.cue_scene" && device.role === "ableton_receiver") {
+        const cue = command.payload as CommandPayloads["ableton.cue_scene"];
+        return text(`${cue.action}\t${cue.songName}\t${cue.artistName}`);
       }
       continue; // a command type this receiver can't act on
     }

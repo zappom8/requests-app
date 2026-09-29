@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { ackDeviceCommand, deviceHeartbeat, getMissedCommands, getReceiverChannel, registerDevice } from "@/actions/devices";
-import { deviceChannelName, LIVE_COMMAND_EVENT, type LiveCommandEvent } from "@/lib/liveControl/events";
+import {
+  deviceChannelName,
+  LIVE_COMMAND_EVENT,
+  type CommandPayloads,
+  type LiveCommandEvent,
+} from "@/lib/liveControl/events";
 import { buildForScoreOpenUrl } from "@/lib/liveControl/forscoreUrl";
 import { getLocalDevice, setLocalDevice } from "@/lib/liveControl/localDevice";
 
@@ -131,10 +136,11 @@ export default function ReceiverClient() {
       void ackDeviceCommand(deviceId, event.eventId).catch(() => addLog("Couldn't acknowledge command"));
 
       if (event.type === "forscore.open_score") {
-        const url = buildForScoreOpenUrl(event.payload);
+        const payload = event.payload as CommandPayloads["forscore.open_score"];
+        const url = buildForScoreOpenUrl(payload);
         const lag = Date.now() - new Date(event.sentAt).getTime();
-        addLog(`${source === "catch-up" ? "Caught up: " : ""}Open "${event.payload.title}" (${lag} ms after send) → ${url}`);
-        setLastCommand({ title: event.payload.title, url, at: new Date().toISOString() });
+        addLog(`${source === "catch-up" ? "Caught up: " : ""}Open "${payload.title}" (${lag} ms after send) → ${url}`);
+        setLastCommand({ title: payload.title, url, at: new Date().toISOString() });
         window.location.href = url;
       } else {
         addLog(`Unsupported command: ${event.type}`);
@@ -160,7 +166,7 @@ export default function ReceiverClient() {
         for (const older of missed.slice(1)) {
           markSeen(older.eventId);
           void ackDeviceCommand(deviceId, older.eventId).catch(() => {});
-          addLog(`Skipped older missed command "${older.payload.title}"`);
+          addLog(`Skipped older missed command "${"title" in older.payload ? older.payload.title : older.type}"`);
         }
         handleCommand(missed[0], "catch-up");
       } catch {

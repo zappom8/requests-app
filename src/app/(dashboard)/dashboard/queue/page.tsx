@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LiveQueuePage() {
   const performer = await getCurrentPerformer();
-  const [activeSongDatabaseId, currentVenueId, venues, forScorePrograms, forScoreLinks] = await Promise.all([
+  const [activeSongDatabaseId, currentVenueId, venues, forScorePrograms, forScoreLinks, setlistDatabases] = await Promise.all([
     getActiveSongDatabaseId(performer.id),
     getCurrentVenueId(performer.id),
     prisma.venue.findMany({
@@ -34,6 +34,12 @@ export default async function LiveQueuePage() {
     prisma.forScoreLink.findMany({
       where: { performerId: performer.id, OR: [{ title: { not: null } }, { filename: { not: null } }] },
       select: { songName: true, artistName: true, title: true, filename: true, setlist: true },
+    }),
+    // Every song list, for the Setlist view (a couple of hundred rows at most).
+    prisma.songDatabase.findMany({
+      where: { performerId: performer.id },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, songs: { select: { name: true, artist: true } } },
     }),
   ]);
   const [queue, bangerKeys] = await Promise.all([
@@ -63,6 +69,7 @@ export default async function LiveQueuePage() {
         initialBangerKeys={bangerKeys}
         venues={venues}
         initialVenueId={currentVenueId}
+        setlistDatabases={setlistDatabases}
         forScorePrograms={Object.fromEntries(
           forScorePrograms.map((p) => [bangerKey(p.songName, p.artistName), p.program]),
         )}
