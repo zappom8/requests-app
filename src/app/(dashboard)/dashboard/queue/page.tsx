@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getActiveSongDatabaseId, getCurrentVenueId } from "@/lib/settings";
 import { getCurrentPerformer } from "@/lib/auth";
@@ -6,6 +7,9 @@ import { getBangerKeys } from "@/lib/bangers";
 import { bangerKey } from "@/lib/bangerKey";
 import LiveQueueList from "./LiveQueueList";
 
+
+// The guitar pad's helper (~/LOOPER) finds this window by its title.
+export const metadata: Metadata = { title: "Live Queue" };
 
 // Always needs current queue state — never statically cached.
 export const dynamic = "force-dynamic";
