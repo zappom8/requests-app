@@ -117,6 +117,11 @@ export default function LiveQueueList({
     setViewState(next);
   }
   const setlistRef = useRef<SetlistHandle>(null);
+  // The window title says which view is showing, so the guitar pad's helper
+  // (which finds this window by "Live Queue") can read it back.
+  useEffect(() => {
+    document.title = view === "setlist" ? "OPERATOR · Live Queue · Setlist" : "OPERATOR · Live Queue";
+  }, [view]);
 
   function setSelectedIndex(next: number) {
     selectedIndexRef.current = next;
@@ -346,6 +351,13 @@ export default function LiveQueueList({
       if (key === "q" || key === "s") {
         e.preventDefault();
         setView(key === "q" ? "queue" : "setlist");
+        return;
+      }
+      // T flips whichever view is showing — the pad's toggle key sends this, so
+      // it always acts on the page's real view rather than a guess at it.
+      if (key === "t") {
+        e.preventDefault();
+        setView(viewRef.current === "queue" ? "setlist" : "queue");
         return;
       }
       // Setlist view: arrows scroll (past the top is the Full set list /
