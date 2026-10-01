@@ -5,7 +5,6 @@ import type { AdminQueueItem } from "@/lib/queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { markPlayed, deleteRequest } from "@/actions/queue";
 import { setCurrentVenue } from "@/actions/venues";
-import { activateBangerMode } from "@/actions/bangers";
 import { bangerKey } from "@/lib/bangerKey";
 import { useMidiOutput } from "@/lib/useMidiOutput";
 import { useLiveControl } from "@/lib/liveControl/useLiveControl";
@@ -36,9 +35,12 @@ export default function LiveQueueList({
   forScorePrograms,
   forScoreLinks,
   setlistDatabases,
+  songLinks,
 }: {
   // Every song database, for the Setlist view.
   setlistDatabases: SetlistDatabase[];
+  // bangerKey(song) -> the songs paired with it in the database.
+  songLinks: Record<string, { songName: string; artistName: string }[]>;
   initialQueue: SerializedItem[];
   songDatabaseId: string;
   initialBangerKeys: string[];
@@ -53,7 +55,7 @@ export default function LiveQueueList({
 }) {
   const [queue, setQueueState] = useState(initialQueue);
   const [bangerKeys, setBangerKeysState] = useState(new Set(initialBangerKeys));
-  const [bangerMode, setBangerModeState] = useState(false);
+  const [bangerMode] = useState(false); // the old queue-filter Banger Mode has no trigger now: bangers are a Setlist sub-list
   const [currentVenueId, setCurrentVenueIdState] = useState(initialVenueId);
   const [pendingActionId, setPendingActionIdState] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndexState] = useState(0);
@@ -93,7 +95,6 @@ export default function LiveQueueList({
   // page only ever mounts one LiveQueueList per active database), so this
   // never needs to be kept in sync after the initial render.
   const songDatabaseIdRef = useRef(songDatabaseId);
-  const bangerActivationInFlight = useRef(false);
 
   // Ids currently being marked played/deleted, from the moment the optimistic
   // removal happens until the server call confirms it. Several rapid
@@ -347,35 +348,19 @@ export default function LiveQueueList({
         setView(key === "q" ? "queue" : "setlist");
         return;
       }
-      // Setlist view: arrows scroll, F / Enter choose. Queue-only keys
-      // (Space played, Delete, B, L) do nothing here, so a stray press
-      // can never mark a request played while browsing the setlist.
+      // Setlist view: arrows scroll (past the top is the Full set list /
+      // Banger mode picker), F / Enter choose, L jumps to the next song paired
+      // with this one. Queue-only keys (Space played, Delete) do nothing here,
+      // so a stray press can never mark a request played while browsing.
       if (viewRef.current === "setlist") {
         const setlist = setlistRef.current;
         if (!setlist) return;
         if (e.key === "ArrowDown" || e.key === "ArrowRight") setlist.move(1);
         else if (e.key === "ArrowUp" || e.key === "ArrowLeft") setlist.move(-1);
         else if (key === "f" || e.key === "Enter") setlist.choose();
+        else if (key === "l") setlist.link();
         else return;
         e.preventDefault();
-        return;
-      }
-
-      if (e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        const next = !bangerModeRef.current;
-        setBangerModeState(next);
-        bangerModeRef.current = next;
-        // Guard against a second overlapping activation if B is pressed
-        // again (e.g. impatience) before the first one has finished —
-        // activateBangerMode is now fast, but this closes the race
-        // entirely rather than just narrowing its window.
-        if (next && !bangerActivationInFlight.current) {
-          bangerActivationInFlight.current = true;
-          void activateBangerMode(songDatabaseIdRef.current, currentVenueIdRef.current).finally(() => {
-            bangerActivationInFlight.current = false;
-          });
-        }
         return;
       }
 
@@ -436,11 +421,6 @@ export default function LiveQueueList({
               </button>
             ))}
           </div>
-          {bangerMode && (
-            <span className="rounded-full bg-tip/20 px-3 py-1 text-xs font-bold text-tip">
-              🔥 BANGER MODE — press B to exit
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-3">
           {liveControl.notice && !forScoreNotice && (
@@ -514,8 +494,8 @@ export default function LiveQueueList({
 
       <p className="hidden sm:block text-xs text-foreground-muted -mt-2">
         {view === "queue"
-          ? "Arrows select · Space played · F forScore + Ableton · L next paired song · Delete remove · B bangers · S setlist"
-          : "Arrows scroll · F or Enter choose (forScore + Ableton) · Q back to requests"}
+          ? "Arrows select · Space played · F forScore + Ableton · L next paired song · Delete remove · S setlist"
+          : "Arrows scroll (up past the top: Full set list / Banger mode) · F or Enter choose · L next paired song · Q back to requests"}
       </p>
 
       {view === "setlist" ? (
@@ -524,6 +504,9 @@ export default function LiveQueueList({
           databases={setlistDatabases}
           defaultDatabaseId={songDatabaseId}
           onChoose={(songName, artistName) => void openSongInForScore(songName, artistName)}
+          bangerKeys={bangerKeys}
+          songLinks={songLinks}
+          onNotice={showForScoreNotice}
         />
       ) : displayedQueue.length === 0 ? (
         <p className="text-foreground-muted text-center py-12">

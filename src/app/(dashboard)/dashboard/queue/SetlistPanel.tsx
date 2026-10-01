@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { bangerKey } from "@/lib/bangerKey";
 
 export type SetlistDatabase = { id: string; name: string; songs: { name: string; artist: string }[] };
 
 // What the Live Queue's once-registered keydown listener (and the guitar
 // pad, which types into this page) drives while the Setlist view is showing.
-export type SetlistHandle = { move: (delta: number) => void; choose: () => void };
+// link: jump to the next song paired with the selected one in the database.
+export type SetlistHandle = { move: (delta: number) => void; choose: () => void; link: () => void };
+
+type Sublist = "full" | "bangers";
 
 // Remembered per browser: which song database the Setlist view shows (the
 // full "Footdrums ALL" list, typically — not necessarily the active one
@@ -16,15 +20,27 @@ const DATABASE_KEY = "liveQueue.setlistDatabaseId";
 // The whole setlist, for when nobody's requesting: scroll it (arrows / the
 // pad's knob) and choose a song (F / Enter / its button), which opens it in
 // forScore and cues its Ableton scene — the same "choose" as on a request.
+//
+// Above the first song sits a picker row — Full set list / Banger mode —
+// reached by scrolling up past the top; choosing it flips between the two
+// (Banger mode shows only this venue's bangers, still scrolled and chosen
+// the same way).
 export default function SetlistPanel({
   databases,
   defaultDatabaseId,
   onChoose,
+  bangerKeys,
+  songLinks,
+  onNotice,
   ref,
 }: {
   databases: SetlistDatabase[];
   defaultDatabaseId: string;
   onChoose: (songName: string, artistName: string) => void;
+  bangerKeys: Set<string>;
+  // bangerKey(song) -> the songs paired with it in the database.
+  songLinks: Record<string, { songName: string; artistName: string }[]>;
+  onNotice: (text: string, ok: boolean) => void;
   ref: Ref<SetlistHandle>;
 }) {
   // Only ever mounted after clicking/typing into the Setlist view — never in
@@ -36,28 +52,50 @@ export default function SetlistPanel({
     } catch {}
     return defaultDatabaseId;
   });
+  const [sublist, setSublistState] = useState<Sublist>("full");
+  // -1 is the Full set list / Banger mode picker row; 0.. are songs.
   const [selected, setSelectedState] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
   const selectedRef = useRef(0);
+  const sublistRef = useRef<Sublist>("full");
   const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  // L's cycling: the song L was first pressed on, and how far round its group we are.
+  const linkAnchor = useRef<{ key: string; pos: number } | null>(null);
 
-  const songs = [...(databases.find((d) => d.id === databaseId)?.songs ?? [])].sort(
+  const allSongs = [...(databases.find((d) => d.id === databaseId)?.songs ?? [])].sort(
     (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.artist.localeCompare(b.artist),
   );
-  // For the imperative move/choose calls from the page's keydown listener.
+  const bangerSongs = allSongs.filter((s) => bangerKeys.has(bangerKey(s.name, s.artist)));
+  const songs = sublist === "bangers" ? bangerSongs : allSongs;
+  // For the imperative move/choose/link calls from the page's keydown listener.
   const songsRef = useRef(songs);
   useEffect(() => {
     songsRef.current = songs;
   });
 
   function select(index: number) {
-    const clamped = Math.max(0, Math.min(index, songsRef.current.length - 1));
+    const clamped = Math.max(-1, Math.min(index, songsRef.current.length - 1));
     selectedRef.current = clamped;
     setSelectedState(clamped);
-    rowRefs.current[clamped]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (clamped === -1) pickerRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    else rowRefs.current[clamped]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function setSublist(next: Sublist) {
+    sublistRef.current = next;
+    setSublistState(next);
+    // Stay on the picker row; the user scrolls down into the new list.
+    linkAnchor.current = null;
+    selectedRef.current = -1;
+    setSelectedState(-1);
   }
 
   function choose(index: number) {
+    if (index === -1) {
+      setSublist(sublistRef.current === "full" ? "bangers" : "full");
+      return;
+    }
     const song = songsRef.current[index];
     if (!song) return;
     select(index);
@@ -65,10 +103,46 @@ export default function SetlistPanel({
     onChoose(song.name, song.artist);
   }
 
+  // L: from the selected song, go to the next song paired with it in the
+  // database (wrapping round the group: A → B → C → A), skipping any that
+  // aren't in the list being shown. Like L on a request card, it also opens
+  // the song (forScore + its Ableton scene).
+  function link() {
+    const current = songsRef.current[selectedRef.current];
+    if (!current) return;
+    const keyOf = (l: { songName: string; artistName: string }) => bangerKey(l.songName, l.artistName);
+    const groupOf = (key: string) => [key, ...(songLinks[key] ?? []).map(keyOf)];
+    const currentKey = bangerKey(current.name, current.artist);
+    let anchor = linkAnchor.current;
+    let group = anchor ? groupOf(anchor.key) : [];
+    // Continuing a cycle only if we're still on the song it last landed on.
+    if (!anchor || group[anchor.pos] !== currentKey) {
+      anchor = { key: currentKey, pos: 0 };
+      group = groupOf(currentKey);
+    }
+    if (group.length === 1) {
+      onNotice(`${current.name} has no paired songs`, false);
+      return;
+    }
+    for (let step = 1; step < group.length; step++) {
+      const pos = (anchor.pos + step) % group.length;
+      const target = songsRef.current.findIndex((s) => bangerKey(s.name, s.artist) === group[pos]);
+      if (target !== -1) {
+        linkAnchor.current = { key: anchor.key, pos };
+        choose(target);
+        return;
+      }
+    }
+    onNotice(`${current.name}'s paired songs aren't in this list`, false);
+  }
+
   useImperativeHandle(ref, () => ({
     move: (delta) => select(selectedRef.current + delta),
     choose: () => choose(selectedRef.current),
+    link,
   }));
+
+  const pickerSelected = selected === -1;
 
   return (
     <div className="flex flex-col gap-3">
@@ -93,16 +167,47 @@ export default function SetlistPanel({
             ))}
           </select>
         </label>
-        <span className="text-sm text-foreground-muted">{songs.length} songs</span>
+        <span className="text-sm text-foreground-muted">
+          {songs.length} {sublist === "bangers" ? "bangers" : "songs"}
+        </span>
+      </div>
+
+      <div
+        ref={pickerRef}
+        className={`flex items-center gap-2 rounded-xl border bg-surface px-3 py-2 ${
+          pickerSelected ? "border-accent ring-2 ring-accent" : "border-border"
+        }`}
+      >
+        {(
+          [
+            ["full", `Full set list (${allSongs.length})`],
+            ["bangers", `🔥 Banger mode (${bangerSongs.length})`],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setSublist(value)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-bold ${
+              sublist === value ? "bg-accent text-accent-foreground" : "text-foreground-muted hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+        {pickerSelected && <span className="ml-auto text-xs text-foreground-muted">F / Choose switches list</span>}
       </div>
 
       {songs.length === 0 ? (
-        <p className="text-foreground-muted text-center py-12">This list has no songs.</p>
+        <p className="text-foreground-muted text-center py-12">
+          {sublist === "bangers" ? "No bangers on this venue's list." : "This list has no songs."}
+        </p>
       ) : (
         <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
           {songs.map((song, index) => {
             const isSelected = index === Math.min(selected, songs.length - 1);
             const isChosen = chosen === `${song.name}\u0000${song.artist}`;
+            const hasLinks = (songLinks[bangerKey(song.name, song.artist)]?.length ?? 0) > 0;
             return (
               <li
                 key={`${song.name}\u0000${song.artist}`}
@@ -118,6 +223,11 @@ export default function SetlistPanel({
                   <p className="font-semibold truncate">
                     {isChosen && <span className="text-accent">▶ </span>}
                     {song.name}
+                    {hasLinks && (
+                      <span className="ml-2 text-xs font-normal text-foreground-muted" title="Has paired songs (L)">
+                        🔗
+                      </span>
+                    )}
                   </p>
                   <p className="text-sm text-foreground-muted truncate">{song.artist}</p>
                 </div>

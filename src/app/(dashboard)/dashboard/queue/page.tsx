@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LiveQueuePage() {
   const performer = await getCurrentPerformer();
-  const [activeSongDatabaseId, currentVenueId, venues, forScorePrograms, forScoreLinks, setlistDatabases] = await Promise.all([
+  const [activeSongDatabaseId, currentVenueId, venues, forScorePrograms, forScoreLinks, setlistDatabases, pairingMembers] = await Promise.all([
     getActiveSongDatabaseId(performer.id),
     getCurrentVenueId(performer.id),
     prisma.venue.findMany({
@@ -41,7 +41,31 @@ export default async function LiveQueuePage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, songs: { select: { name: true, artist: true } } },
     }),
+    // Song pairing groups, for the Setlist view's L key: songs linked in the
+    // database, whether or not anyone has requested them.
+    prisma.songPairingGroupMember.findMany({
+      where: { performerId: performer.id },
+      orderBy: [{ groupId: "asc" }, { createdAt: "asc" }],
+      select: { groupId: true, songName: true, artistName: true },
+    }),
   ]);
+
+  // bangerKey(song) -> every other song that shares a pairing group with it.
+  const songLinks: Record<string, { songName: string; artistName: string }[]> = {};
+  const groups = new Map<string, { songName: string; artistName: string }[]>();
+  for (const m of pairingMembers) {
+    groups.set(m.groupId, [...(groups.get(m.groupId) ?? []), { songName: m.songName, artistName: m.artistName }]);
+  }
+  for (const members of groups.values()) {
+    for (const me of members) {
+      const key = bangerKey(me.songName, me.artistName);
+      const others = members.filter((o) => o !== me);
+      songLinks[key] = [
+        ...(songLinks[key] ?? []),
+        ...others.filter((o) => !(songLinks[key] ?? []).some((x) => x.songName === o.songName && x.artistName === o.artistName)),
+      ];
+    }
+  }
   const [queue, bangerKeys] = await Promise.all([
     activeSongDatabaseId ? getAdminQueue(activeSongDatabaseId) : Promise.resolve([]),
     getBangerKeys(currentVenueId),
@@ -70,6 +94,7 @@ export default async function LiveQueuePage() {
         venues={venues}
         initialVenueId={currentVenueId}
         setlistDatabases={setlistDatabases}
+        songLinks={songLinks}
         forScorePrograms={Object.fromEntries(
           forScorePrograms.map((p) => [bangerKey(p.songName, p.artistName), p.program]),
         )}
