@@ -61,7 +61,7 @@ export default function SetlistPanel({
   const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   // L's cycling: the song L was first pressed on, and how far round its group we are.
-  const linkAnchor = useRef<{ key: string; pos: number } | null>(null);
+  const linkAnchor = useRef<{ key: string; name: string; artist: string; pos: number; selKey: string } | null>(null);
 
   const allSongs = [...(databases.find((d) => d.id === databaseId)?.songs ?? [])].sort(
     (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.artist.localeCompare(b.artist),
@@ -104,36 +104,38 @@ export default function SetlistPanel({
   }
 
   // L: from the selected song, go to the next song paired with it in the
-  // database (wrapping round the group: A → B → C → A), skipping any that
-  // aren't in the list being shown. Like L on a request card, it also opens
-  // the song (forScore + its Ableton scene).
+  // database, wrapping round the group (A → B → C → A). Like L on a request
+  // card, it opens the song too (forScore + its Ableton scene). If that song
+  // isn't in the list being shown (e.g. a paired song that isn't a banger), it
+  // is still opened, just without moving the highlight.
   function link() {
     const current = songsRef.current[selectedRef.current];
-    if (!current) return;
-    const keyOf = (l: { songName: string; artistName: string }) => bangerKey(l.songName, l.artistName);
-    const groupOf = (key: string) => [key, ...(songLinks[key] ?? []).map(keyOf)];
-    const currentKey = bangerKey(current.name, current.artist);
-    let anchor = linkAnchor.current;
-    let group = anchor ? groupOf(anchor.key) : [];
-    // Continuing a cycle only if we're still on the song it last landed on.
-    if (!anchor || group[anchor.pos] !== currentKey) {
-      anchor = { key: currentKey, pos: 0 };
-      group = groupOf(currentKey);
+    if (!current) {
+      onNotice("Select a song first (L works on a song, not the picker)", false);
+      return;
     }
+    const entry = (l: { songName: string; artistName: string }) => ({ key: bangerKey(l.songName, l.artistName), name: l.songName, artist: l.artistName });
+    const groupOf = (a: { key: string; name: string; artist: string }) => [a, ...(songLinks[a.key] ?? []).map(entry)];
+    const currentEntry = { key: bangerKey(current.name, current.artist), name: current.name, artist: current.artist };
+    let anchor = linkAnchor.current;
+    // Continuing a cycle only if the highlight hasn't moved since L last ran.
+    if (!anchor || anchor.selKey !== currentEntry.key) anchor = { ...currentEntry, pos: 0, selKey: currentEntry.key };
+    const group = groupOf(anchor);
     if (group.length === 1) {
       onNotice(`${current.name} has no paired songs`, false);
       return;
     }
-    for (let step = 1; step < group.length; step++) {
-      const pos = (anchor.pos + step) % group.length;
-      const target = songsRef.current.findIndex((s) => bangerKey(s.name, s.artist) === group[pos]);
-      if (target !== -1) {
-        linkAnchor.current = { key: anchor.key, pos };
-        choose(target);
-        return;
-      }
+    const pos = (anchor.pos + 1) % group.length;
+    const target = group[pos];
+    const index = songsRef.current.findIndex((s) => bangerKey(s.name, s.artist) === target.key);
+    if (index !== -1) {
+      linkAnchor.current = { ...anchor, pos, selKey: target.key };
+      choose(index);
+    } else {
+      linkAnchor.current = { ...anchor, pos, selKey: currentEntry.key };
+      onChoose(target.name, target.artist);
+      onNotice(`${target.name} isn't in this list, opened anyway`, true);
     }
-    onNotice(`${current.name}'s paired songs aren't in this list`, false);
   }
 
   useImperativeHandle(ref, () => ({
