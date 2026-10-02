@@ -12,6 +12,13 @@ export type SetlistHandle = { move: (delta: number) => void; choose: () => void;
 
 type Sublist = "full" | "bangers";
 
+// A linked song's title for a setlist row: just the song name, cut short if it's long.
+const SHORT_TITLE_MAX = 18;
+function shortTitle(name: string): string {
+  const trimmed = name.replace(/\s+/g, " ").trim();
+  return trimmed.length > SHORT_TITLE_MAX ? `${trimmed.slice(0, SHORT_TITLE_MAX - 1).trimEnd()}…` : trimmed;
+}
+
 // Remembered per browser: which song database the Setlist view shows (the
 // full "Footdrums ALL" list, typically — not necessarily the active one
 // people request from).
@@ -209,7 +216,7 @@ export default function SetlistPanel({
           {songs.map((song, index) => {
             const isSelected = index === Math.min(selected, songs.length - 1);
             const isChosen = chosen === `${song.name}\u0000${song.artist}`;
-            const hasLinks = (songLinks[bangerKey(song.name, song.artist)]?.length ?? 0) > 0;
+            const links = songLinks[bangerKey(song.name, song.artist)] ?? [];
             return (
               <li
                 key={`${song.name}\u0000${song.artist}`}
@@ -225,13 +232,16 @@ export default function SetlistPanel({
                   <p className="font-semibold truncate">
                     {isChosen && <span className="text-accent">▶ </span>}
                     {song.name}
-                    {hasLinks && (
-                      <span className="ml-2 text-xs font-normal text-foreground-muted" title="Has paired songs (L)">
-                        🔗
-                      </span>
-                    )}
                   </p>
                   <p className="text-sm text-foreground-muted truncate">{song.artist}</p>
+                  {links.length > 0 && (
+                    <p
+                      className="text-xs text-accent truncate"
+                      title={`Linked (L): ${links.map((l) => l.songName).join(", ")}`}
+                    >
+                      🔗 {links.map((l) => shortTitle(l.songName)).join(" · ")}
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
