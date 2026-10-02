@@ -80,6 +80,14 @@ export default function SetlistPanel({
     songsRef.current = songs;
   });
 
+  // The songs linked to one, as shown: in Banger mode only the linked songs that are bangers too.
+  function visibleLinks(key: string) {
+    const links = songLinks[key] ?? [];
+    return sublistRef.current === "bangers"
+      ? links.filter((l) => bangerKeys.has(bangerKey(l.songName, l.artistName)))
+      : links;
+  }
+
   function select(index: number) {
     const clamped = Math.max(-1, Math.min(index, songsRef.current.length - 1));
     selectedRef.current = clamped;
@@ -112,8 +120,8 @@ export default function SetlistPanel({
 
   // L: light up the next tile of the selected row's group (the song, then each song
   // linked to it in the database, wrapping round), and open that song like L does on a
-  // request card (forScore + its Ableton scene). The row stays selected, and the linked
-  // song doesn't have to be in the list being shown (e.g. it isn't a banger).
+  // request card (forScore + its Ableton scene). The row stays selected. In Banger mode
+  // only the linked songs that are bangers are shown, and L cycles through just those.
   function link() {
     const current = songsRef.current[selectedRef.current];
     if (!current) {
@@ -121,9 +129,9 @@ export default function SetlistPanel({
       return;
     }
     const key = bangerKey(current.name, current.artist);
-    const links = songLinks[key] ?? [];
+    const links = visibleLinks(key);
     if (links.length === 0) {
-      onNotice(`${current.name} has no paired songs`, false);
+      onNotice(`${current.name} has no linked ${sublistRef.current === "bangers" ? "bangers" : "songs"}`, false);
       return;
     }
     const focus = linkFocusRef.current;
@@ -215,7 +223,9 @@ export default function SetlistPanel({
             const isSelected = index === Math.min(selected, songs.length - 1);
             const isChosen = chosen === `${song.name}\u0000${song.artist}`;
             const rowKey = bangerKey(song.name, song.artist);
-            const links = songLinks[rowKey] ?? [];
+            const links = sublist === "bangers"
+              ? (songLinks[rowKey] ?? []).filter((l) => bangerKeys.has(bangerKey(l.songName, l.artistName)))
+              : (songLinks[rowKey] ?? []);
             const linkLit = linkFocus?.key === rowKey && linkFocus.pos > 0; // one of its linked tiles is lit instead
             return (
               <li
