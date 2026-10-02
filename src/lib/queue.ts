@@ -151,6 +151,9 @@ async function getGroupedQueue(songDatabaseId: string): Promise<GroupedRequest[]
 
   primaryItems.sort(
     (a, b) =>
+      // Banger Mode additions (staged for the operator only) always go behind every real
+      // request, filler included — they're there to fill gaps, never to jump the queue.
+      Number(a.isBangerAddition) - Number(b.isBangerAddition) ||
       Number(a.isFiller) - Number(b.isFiller) ||
       b.tipAmountCents - a.tipAmountCents ||
       b.otherRequesterCount - a.otherRequesterCount ||

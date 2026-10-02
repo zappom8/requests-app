@@ -45,6 +45,7 @@ export default function SetlistPanel({
   bangerKeys,
   songLinks,
   onNotice,
+  onActivateBangers,
   ref,
 }: {
   databases: SetlistDatabase[];
@@ -54,6 +55,8 @@ export default function SetlistPanel({
   // bangerKey(song) -> the songs paired with it in the database.
   songLinks: Record<string, { songName: string; artistName: string }[]>;
   onNotice: (text: string, ok: boolean) => void;
+  // Called when Banger mode is chosen: stages the bangers in the live queue.
+  onActivateBangers: () => void;
   ref: Ref<SetlistHandle>;
 }) {
   // Only ever mounted after clicking/typing into the Setlist view — never in
@@ -148,6 +151,7 @@ export default function SetlistPanel({
 
   function setSublist(next: Sublist) {
     sublistRef.current = next;
+    if (next === "bangers") onActivateBangers();
     remember({ sublist: next, selected: -1 });
     setSublistState(next);
     // Stay on the picker row; the user scrolls down into the new list.

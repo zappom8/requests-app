@@ -9,6 +9,7 @@ import { bangerKey } from "@/lib/bangerKey";
 import { useMidiOutput } from "@/lib/useMidiOutput";
 import { useLiveControl } from "@/lib/liveControl/useLiveControl";
 import { cueAbletonScene } from "@/actions/devices";
+import { activateBangerMode } from "@/actions/bangers";
 import SetlistPanel, { type SetlistDatabase, type SetlistHandle } from "./SetlistPanel";
 
 type SerializedItem = Omit<AdminQueueItem, "requestedAt"> & { requestedAt: string };
@@ -519,6 +520,12 @@ export default function LiveQueueList({
           bangerKeys={bangerKeys}
           songLinks={songLinks}
           onNotice={showForScoreNotice}
+          // Choosing Banger mode also puts this venue's bangers in the live queue (operator
+          // only, behind every real request). Anything already queued is skipped.
+          onActivateBangers={() => {
+            void activateBangerMode(songDatabaseIdRef.current, currentVenueIdRef.current);
+            showForScoreNotice("Bangers added to the live queue (only you can see them)", true);
+          }}
         />
       ) : displayedQueue.length === 0 ? (
         <p className="text-foreground-muted text-center py-12">
