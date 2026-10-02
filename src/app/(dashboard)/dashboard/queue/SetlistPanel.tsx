@@ -73,19 +73,44 @@ export default function SetlistPanel({
     (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.artist.localeCompare(b.artist),
   );
   const bangerSongs = allSongs.filter((s) => bangerKeys.has(bangerKey(s.name, s.artist)));
-  const songs = sublist === "bangers" ? bangerSongs : allSongs;
+  // Banger mode lists a linked group once: its first song (alphabetically) is the row and the
+  // rest of the group sits in that row as tiles, with no separate row of their own.
+  const bangerByKey = new Map(bangerSongs.map((s) => [bangerKey(s.name, s.artist), s]));
+  const bangerRows: { name: string; artist: string }[] = [];
+  const bangerTiles = new Map<string, { songName: string; artistName: string }[]>();
+  {
+    const seen = new Set<string>();
+    for (const song of bangerSongs) {
+      const key = bangerKey(song.name, song.artist);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const group = [key];
+      for (let i = 0; i < group.length; i++) {
+        for (const l of songLinks[group[i]] ?? []) {
+          const lk = bangerKey(l.songName, l.artistName);
+          if (bangerByKey.has(lk) && !seen.has(lk)) {
+            seen.add(lk);
+            group.push(lk);
+          }
+        }
+      }
+      bangerRows.push(song);
+      bangerTiles.set(
+        key,
+        group.slice(1).map((k) => ({ songName: bangerByKey.get(k)!.name, artistName: bangerByKey.get(k)!.artist })),
+      );
+    }
+  }
+  const songs = sublist === "bangers" ? bangerRows : allSongs;
   // For the imperative move/choose/link calls from the page's keydown listener.
   const songsRef = useRef(songs);
   useEffect(() => {
     songsRef.current = songs;
   });
 
-  // The songs linked to one, as shown: in Banger mode only the linked songs that are bangers too.
+  // The songs linked to one, as shown: in Banger mode its condensed group (bangers only).
   function visibleLinks(key: string) {
-    const links = songLinks[key] ?? [];
-    return sublistRef.current === "bangers"
-      ? links.filter((l) => bangerKeys.has(bangerKey(l.songName, l.artistName)))
-      : links;
+    return sublistRef.current === "bangers" ? bangerTiles.get(key) ?? [] : songLinks[key] ?? [];
   }
 
   function select(index: number) {
@@ -183,7 +208,7 @@ export default function SetlistPanel({
           </select>
         </label>
         <span className="text-sm text-foreground-muted">
-          {songs.length} {sublist === "bangers" ? "bangers" : "songs"}
+          {sublist === "bangers" ? `${bangerSongs.length} bangers` : `${songs.length} songs`}
         </span>
       </div>
 
@@ -223,9 +248,7 @@ export default function SetlistPanel({
             const isSelected = index === Math.min(selected, songs.length - 1);
             const isChosen = chosen === `${song.name}\u0000${song.artist}`;
             const rowKey = bangerKey(song.name, song.artist);
-            const links = sublist === "bangers"
-              ? (songLinks[rowKey] ?? []).filter((l) => bangerKeys.has(bangerKey(l.songName, l.artistName)))
-              : (songLinks[rowKey] ?? []);
+            const links = sublist === "bangers" ? bangerTiles.get(rowKey) ?? [] : songLinks[rowKey] ?? [];
             const linkLit = linkFocus?.key === rowKey && linkFocus.pos > 0; // one of its linked tiles is lit instead
             return (
               <li
