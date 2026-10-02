@@ -12,6 +12,19 @@ export type SetlistHandle = { move: (delta: number) => void; choose: () => void;
 
 type Sublist = "full" | "bangers";
 
+// Where you were in the setlist, kept for as long as the page is open: the panel is
+// unmounted whenever the Live Queue shows the Queue view, and coming back should land on
+// the same list (Full set list or Banger mode) and the same song, not the top.
+const memory: {
+  sublist: Sublist;
+  selected: number;
+  chosen: string | null;
+  linkFocus: { key: string; pos: number } | null;
+} = { sublist: "full", selected: 0, chosen: null, linkFocus: null };
+function remember(patch: Partial<typeof memory>) {
+  Object.assign(memory, patch);
+}
+
 // Remembered per browser: which song database the Setlist view shows (the
 // full "Footdrums ALL" list, typically — not necessarily the active one
 // people request from).
@@ -52,22 +65,33 @@ export default function SetlistPanel({
     } catch {}
     return defaultDatabaseId;
   });
-  const [sublist, setSublistState] = useState<Sublist>("full");
+  const [sublist, setSublistState] = useState<Sublist>(memory.sublist);
   // -1 is the Full set list / Banger mode picker row; 0.. are songs.
-  const [selected, setSelectedState] = useState(0);
-  const [chosen, setChosen] = useState<string | null>(null);
-  const selectedRef = useRef(0);
-  const sublistRef = useRef<Sublist>("full");
+  const [selected, setSelectedState] = useState(memory.selected);
+  const [chosen, setChosenState] = useState<string | null>(memory.chosen);
+  function setChosen(next: string | null) {
+    remember({ chosen: next });
+    setChosenState(next);
+  }
+  const selectedRef = useRef(memory.selected);
+  const sublistRef = useRef<Sublist>(memory.sublist);
   const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   // Which tile of a row's group is lit: that row's song itself (pos 0) or its linked
   // songs (pos 1, 2...), as on the Live Queue's request cards. A ref too, for L.
-  const [linkFocus, setLinkFocusState] = useState<{ key: string; pos: number } | null>(null);
-  const linkFocusRef = useRef<{ key: string; pos: number } | null>(null);
+  const [linkFocus, setLinkFocusState] = useState<{ key: string; pos: number } | null>(memory.linkFocus);
+  const linkFocusRef = useRef<{ key: string; pos: number } | null>(memory.linkFocus);
   function setLinkFocus(next: { key: string; pos: number } | null) {
     linkFocusRef.current = next;
+    remember({ linkFocus: next });
     setLinkFocusState(next);
   }
+
+  // Coming back to the setlist: scroll the song you were on into view.
+  useEffect(() => {
+    const row = memory.selected >= 0 ? rowRefs.current[memory.selected] : null;
+    (row ?? pickerRef.current)?.scrollIntoView({ block: "center" });
+  }, []);
 
   const allSongs = [...(databases.find((d) => d.id === databaseId)?.songs ?? [])].sort(
     (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.artist.localeCompare(b.artist),
@@ -116,6 +140,7 @@ export default function SetlistPanel({
   function select(index: number) {
     const clamped = Math.max(-1, Math.min(index, songsRef.current.length - 1));
     selectedRef.current = clamped;
+    remember({ selected: clamped });
     setSelectedState(clamped);
     if (clamped === -1) pickerRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     else rowRefs.current[clamped]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -123,6 +148,7 @@ export default function SetlistPanel({
 
   function setSublist(next: Sublist) {
     sublistRef.current = next;
+    remember({ sublist: next, selected: -1 });
     setSublistState(next);
     // Stay on the picker row; the user scrolls down into the new list.
     setLinkFocus(null);
