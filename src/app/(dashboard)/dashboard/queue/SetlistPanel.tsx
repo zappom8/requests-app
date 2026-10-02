@@ -12,13 +12,6 @@ export type SetlistHandle = { move: (delta: number) => void; choose: () => void;
 
 type Sublist = "full" | "bangers";
 
-// A linked song's title for a setlist row: just the song name, cut short if it's long.
-const SHORT_TITLE_MAX = 18;
-function shortTitle(name: string): string {
-  const trimmed = name.replace(/\s+/g, " ").trim();
-  return trimmed.length > SHORT_TITLE_MAX ? `${trimmed.slice(0, SHORT_TITLE_MAX - 1).trimEnd()}…` : trimmed;
-}
-
 // Remembered per browser: which song database the Setlist view shows (the
 // full "Footdrums ALL" list, typically — not necessarily the active one
 // people request from).
@@ -67,8 +60,14 @@ export default function SetlistPanel({
   const sublistRef = useRef<Sublist>("full");
   const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
   const pickerRef = useRef<HTMLDivElement | null>(null);
-  // L's cycling: the song L was first pressed on, and how far round its group we are.
-  const linkAnchor = useRef<{ key: string; name: string; artist: string; pos: number; selKey: string } | null>(null);
+  // Which tile of a row's group is lit: that row's song itself (pos 0) or its linked
+  // songs (pos 1, 2...), as on the Live Queue's request cards. A ref too, for L.
+  const [linkFocus, setLinkFocusState] = useState<{ key: string; pos: number } | null>(null);
+  const linkFocusRef = useRef<{ key: string; pos: number } | null>(null);
+  function setLinkFocus(next: { key: string; pos: number } | null) {
+    linkFocusRef.current = next;
+    setLinkFocusState(next);
+  }
 
   const allSongs = [...(databases.find((d) => d.id === databaseId)?.songs ?? [])].sort(
     (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.artist.localeCompare(b.artist),
@@ -93,7 +92,7 @@ export default function SetlistPanel({
     sublistRef.current = next;
     setSublistState(next);
     // Stay on the picker row; the user scrolls down into the new list.
-    linkAnchor.current = null;
+    setLinkFocus(null);
     selectedRef.current = -1;
     setSelectedState(-1);
   }
@@ -107,42 +106,41 @@ export default function SetlistPanel({
     if (!song) return;
     select(index);
     setChosen(`${song.name}\u0000${song.artist}`);
+    setLinkFocus({ key: bangerKey(song.name, song.artist), pos: 0 });
     onChoose(song.name, song.artist);
   }
 
-  // L: from the selected song, go to the next song paired with it in the
-  // database, wrapping round the group (A → B → C → A). Like L on a request
-  // card, it opens the song too (forScore + its Ableton scene). If that song
-  // isn't in the list being shown (e.g. a paired song that isn't a banger), it
-  // is still opened, just without moving the highlight.
+  // L: light up the next tile of the selected row's group (the song, then each song
+  // linked to it in the database, wrapping round), and open that song like L does on a
+  // request card (forScore + its Ableton scene). The row stays selected, and the linked
+  // song doesn't have to be in the list being shown (e.g. it isn't a banger).
   function link() {
     const current = songsRef.current[selectedRef.current];
     if (!current) {
       onNotice("Select a song first (L works on a song, not the picker)", false);
       return;
     }
-    const entry = (l: { songName: string; artistName: string }) => ({ key: bangerKey(l.songName, l.artistName), name: l.songName, artist: l.artistName });
-    const groupOf = (a: { key: string; name: string; artist: string }) => [a, ...(songLinks[a.key] ?? []).map(entry)];
-    const currentEntry = { key: bangerKey(current.name, current.artist), name: current.name, artist: current.artist };
-    let anchor = linkAnchor.current;
-    // Continuing a cycle only if the highlight hasn't moved since L last ran.
-    if (!anchor || anchor.selKey !== currentEntry.key) anchor = { ...currentEntry, pos: 0, selKey: currentEntry.key };
-    const group = groupOf(anchor);
-    if (group.length === 1) {
+    const key = bangerKey(current.name, current.artist);
+    const links = songLinks[key] ?? [];
+    if (links.length === 0) {
       onNotice(`${current.name} has no paired songs`, false);
       return;
     }
-    const pos = (anchor.pos + 1) % group.length;
-    const target = group[pos];
-    const index = songsRef.current.findIndex((s) => bangerKey(s.name, s.artist) === target.key);
-    if (index !== -1) {
-      linkAnchor.current = { ...anchor, pos, selKey: target.key };
-      choose(index);
-    } else {
-      linkAnchor.current = { ...anchor, pos, selKey: currentEntry.key };
-      onChoose(target.name, target.artist);
-      onNotice(`${target.name} isn't in this list, opened anyway`, true);
-    }
+    const focus = linkFocusRef.current;
+    // Starting a cycle on this row: the first L goes to the first linked song.
+    const pos = focus && focus.key === key ? (focus.pos + 1) % (links.length + 1) : 1;
+    const target = pos === 0 ? { songName: current.name, artistName: current.artist } : links[pos - 1];
+    setLinkFocus({ key, pos });
+    setChosen(`${target.songName}\u0000${target.artistName}`);
+    onChoose(target.songName, target.artistName);
+  }
+
+  // A linked-song tile clicked: the same as cycling to it with L.
+  function chooseLinked(rowIndex: number, key: string, pos: number, target: { songName: string; artistName: string }) {
+    select(rowIndex);
+    setLinkFocus({ key, pos });
+    setChosen(`${target.songName}\u0000${target.artistName}`);
+    onChoose(target.songName, target.artistName);
   }
 
   useImperativeHandle(ref, () => ({
@@ -216,32 +214,51 @@ export default function SetlistPanel({
           {songs.map((song, index) => {
             const isSelected = index === Math.min(selected, songs.length - 1);
             const isChosen = chosen === `${song.name}\u0000${song.artist}`;
-            const links = songLinks[bangerKey(song.name, song.artist)] ?? [];
+            const rowKey = bangerKey(song.name, song.artist);
+            const links = songLinks[rowKey] ?? [];
+            const linkLit = linkFocus?.key === rowKey && linkFocus.pos > 0; // one of its linked tiles is lit instead
             return (
               <li
-                key={`${song.name}\u0000${song.artist}`}
+                key={rowKey}
                 ref={(el) => {
                   rowRefs.current[index] = el;
                 }}
                 onClick={() => select(index)}
-                className={`flex items-center gap-3 px-4 py-2.5 ${
+                className={`flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 ${
                   isSelected ? "bg-accent/15 ring-2 ring-inset ring-accent" : ""
                 }`}
               >
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 basis-full sm:basis-[26%] sm:shrink-0">
                   <p className="font-semibold truncate">
-                    {isChosen && <span className="text-accent">▶ </span>}
+                    {isChosen && !linkLit && <span className="text-accent">▶ </span>}
                     {song.name}
                   </p>
                   <p className="text-sm text-foreground-muted truncate">{song.artist}</p>
-                  {links.length > 0 && (
-                    <p
-                      className="text-xs text-accent truncate"
-                      title={`Linked (L): ${links.map((l) => l.songName).join(", ")}`}
-                    >
-                      🔗 {links.map((l) => shortTitle(l.songName)).join(" · ")}
-                    </p>
-                  )}
+                </div>
+                {/* The songs linked to this one, side by side across the row. */}
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  {links.map((l, i) => {
+                    const lit = linkFocus?.key === rowKey && linkFocus.pos === i + 1;
+                    return (
+                      <button
+                        key={`${l.songName}\u0000${l.artistName}`}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          chooseLinked(index, rowKey, i + 1, l);
+                        }}
+                        title={`${l.songName} — ${l.artistName} (L cycles through these)`}
+                        className={`max-w-[18rem] truncate rounded-lg border px-3 py-1.5 text-sm ${
+                          lit
+                            ? "border-accent bg-accent/25 font-semibold text-foreground ring-1 ring-accent"
+                            : "border-border text-foreground-muted hover:text-foreground"
+                        }`}
+                      >
+                        {lit ? "▶ " : "🔗 "}
+                        {l.songName}
+                      </button>
+                    );
+                  })}
                 </div>
                 <button
                   type="button"
