@@ -116,6 +116,9 @@ export default function RequestFlow({
   }, [searchQuery, songDatabaseId]);
 
   function handleSearchChange(value: string) {
+    // Starting a search from the plain list: remember where the list was
+    // scrolled to so "Request Another" can drop the search and go back there.
+    if (!searchQuery.trim() && value.trim()) preSearchScrollRef.current = window.scrollY;
     setSearchQuery(value);
     searchLoggedRef.current = false;
     if (!value.trim()) setSearchResults(null);
@@ -138,6 +141,8 @@ export default function RequestFlow({
   // mid-alphabet or mid-search-results, instead of dumping them back at the
   // top of the whole catalog every time.
   const browseScrollRef = useRef(0);
+  // Scroll position of the unfiltered list from just before a search began.
+  const preSearchScrollRef = useRef(0);
 
   function goToDetails(song: SongResult) {
     browseScrollRef.current = window.scrollY;
@@ -159,7 +164,14 @@ export default function RequestFlow({
     goToDetails(song);
   }
 
-  function backToBrowse() {
+  function backToBrowse(clearSearch = false) {
+    if (clearSearch && searchQuery.trim()) {
+      // "Request Another": drop the search and return to the spot in the
+      // original list, not the search results.
+      setSearchQuery("");
+      setSearchResults(null);
+      browseScrollRef.current = preSearchScrollRef.current;
+    }
     setStep("browse");
     setSelectedSong(null);
     setRequesterName("");
@@ -168,8 +180,8 @@ export default function RequestFlow({
     setOtherAmountDollars("");
     setCreatedRequestId(null);
     setError(null);
-    // Search query/results and browse mode deliberately kept as-is — see
-    // browseScrollRef above, same reasoning.
+    // Otherwise (Back) search query/results and browse mode are kept as-is —
+    // see browseScrollRef above, same reasoning.
     searchLoggedRef.current = false;
   }
 
@@ -252,7 +264,7 @@ export default function RequestFlow({
         <h1 className="text-2xl font-semibold">Request received!</h1>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <button
-            onClick={backToBrowse}
+            onClick={() => backToBrowse(true)}
             className="rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground hover:bg-accent-hover text-center"
           >
             Request Another
@@ -290,7 +302,7 @@ export default function RequestFlow({
     return (
       <div className="min-h-screen w-full px-4 py-6 max-w-md mx-auto flex flex-col gap-6">
         <button
-          onClick={backToBrowse}
+          onClick={() => backToBrowse()}
           className="self-start text-sm text-foreground-muted text-left hover:text-foreground py-3 -my-3"
         >
           ← Back
