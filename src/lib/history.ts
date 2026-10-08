@@ -46,6 +46,7 @@ export function buildHistoryWhere(filters: HistoryFilters, performerId: string):
     // explicitly.
     AND: [
       { NOT: { requesterName: { contains: "test", mode: "insensitive" } } },
+      { NOT: { requesterName: { contains: "zappo", mode: "insensitive" } } },
       { OR: [{ billingName: null }, { NOT: { billingName: { contains: "test", mode: "insensitive" } } }] },
     ],
   };

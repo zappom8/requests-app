@@ -45,13 +45,14 @@ function dowFilter(daysOfWeek: number[] | undefined) {
 // status. Excludes rows auto-added via a SongPairing rule
 // (src/actions/requests.ts) or Banger Mode (src/actions/bangers.ts
 // activateBangerMode), and test requests — any whose requester or billing
-// name contains "test" (any case). Song titles aren't checked, so a real
+// name contains "test", or whose requester contains "zappo" (Lochie's own
+// testing name), any case. Song titles aren't checked, so a real
 // request for e.g. "The Greatest Show" still counts. History applies the
 // same rule (src/lib/history.ts buildHistoryWhere).
 // Also scoped to one performer's databases.
 function realRequestsOnly(performerId: string, venueId?: string) {
   const venue = venueId ? Prisma.sql`AND "venueId" = ${venueId}` : Prisma.sql``;
-  return Prisma.sql`${venue} AND "songDatabaseId" IN (SELECT "id" FROM "SongDatabase" WHERE "performerId" = ${performerId}) AND "isPairedAddition" = false AND "isBangerAddition" = false AND "requesterName" NOT ILIKE '%test%' AND COALESCE("billingName", '') NOT ILIKE '%test%'`;
+  return Prisma.sql`${venue} AND "songDatabaseId" IN (SELECT "id" FROM "SongDatabase" WHERE "performerId" = ${performerId}) AND "isPairedAddition" = false AND "isBangerAddition" = false AND "requesterName" NOT ILIKE '%test%' AND COALESCE("billingName", '') NOT ILIKE '%test%' AND "requesterName" NOT ILIKE '%zappo%'`;
 }
 
 export type Overview = {
