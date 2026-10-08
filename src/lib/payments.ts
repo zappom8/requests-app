@@ -25,6 +25,7 @@ export type PaymentItem = {
   effectivePaymentId: string | null;
   effectiveFeeCents: number | null;
   requestedAt: Date;
+  venueName: string | null;
 };
 
 export type PaymentTotals = {
@@ -72,6 +73,7 @@ export async function getPayments(
       stripePaymentIntentId: true,
       squarePaymentId: true,
       requestedAt: true,
+      venue: { select: { name: true } },
     },
   });
 
@@ -80,8 +82,10 @@ export async function getPayments(
   // derived fields instead of duplicating this logic.
   const items: PaymentItem[] = rows.map((row) => {
     const provider: PaymentProvider = row.squarePaymentId ? "square" : row.stripePaymentIntentId ? "stripe" : null;
+    const { venue, ...rest } = row;
     return {
-      ...row,
+      ...rest,
+      venueName: venue?.name ?? null,
       provider,
       effectivePaymentId: row.squarePaymentId ?? row.stripePaymentIntentId ?? null,
       effectiveFeeCents: row.squareFeeCents ?? row.stripeFeeCents ?? null,

@@ -28,6 +28,7 @@ export type HistoryItem = {
   tipAmountCents: number;
   paymentStatus: string;
   databaseName: string;
+  venueName: string | null;
 };
 
 export function buildHistoryWhere(filters: HistoryFilters, performerId: string): Prisma.RequestWhereInput {
@@ -106,6 +107,7 @@ export async function getRequestHistory(
       tipAmountCents: true,
       paymentStatus: true,
       songDatabase: { select: { name: true } },
+      venue: { select: { name: true } },
     },
   });
 
@@ -125,6 +127,7 @@ export async function getRequestHistory(
       tipAmountCents: r.tipAmountCents,
       paymentStatus: r.paymentStatus,
       databaseName: r.songDatabase.name,
+      venueName: r.venue?.name ?? null,
     })),
     nextCursor: hasMore ? page[page.length - 1].id : null,
   };

@@ -97,6 +97,7 @@ export default async function PaymentsPage({
             <tr className="border-b border-border text-left text-xs text-foreground-muted">
               <th className="px-4 py-2 font-medium">Song</th>
               <th className="px-4 py-2 font-medium">Requester</th>
+              <th className="px-4 py-2 font-medium">Venue</th>
               <th className="px-4 py-2 font-medium">Gross</th>
               <th className="px-4 py-2 font-medium">Fee</th>
               <th className="px-4 py-2 font-medium">Net</th>
@@ -114,6 +115,7 @@ export default async function PaymentsPage({
                   <p className="text-xs text-foreground-muted">{item.artistName}</p>
                 </td>
                 <td className="px-4 py-2">{item.requesterName}</td>
+                <td className="px-4 py-2 text-foreground-muted">{item.venueName ?? "—"}</td>
                 <td className="px-4 py-2 text-tip">{money(item.tipAmountCents)}</td>
                 <td className="px-4 py-2 text-foreground-muted">{money(item.effectiveFeeCents ?? 0)}</td>
                 <td className="px-4 py-2">
@@ -136,7 +138,7 @@ export default async function PaymentsPage({
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-foreground-muted">
+                <td colSpan={10} className="px-4 py-8 text-center text-foreground-muted">
                   No tips yet.
                 </td>
               </tr>

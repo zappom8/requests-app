@@ -27,6 +27,18 @@ type SearchParams = {
   prevCursors?: string;
 };
 
+const CONTROL =
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent";
+
+function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
+  return (
+    <div className={`flex flex-col gap-1 ${className}`}>
+      <label className="text-xs text-foreground-muted">{label}</label>
+      {children}
+    </div>
+  );
+}
+
 function buildQueryString(params: Record<string, string | undefined>): string {
   const usp = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -117,87 +129,81 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
         <p className="text-sm text-foreground-muted">Every request ever made.</p>
       </div>
 
-      <form className="grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-lg border border-border bg-surface p-4">
+      <form className="grid grid-cols-1 sm:grid-cols-4 items-end gap-x-3 gap-y-4 rounded-lg border border-border bg-surface p-4">
         <VenueFilterSelect venues={venues} selectedVenueId={venueId} />
-        <select
-          name="song"
-          defaultValue={sp.song ?? ""}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">Any song</option>
-          {songNames.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <select
-          name="artist"
-          defaultValue={sp.artist ?? ""}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">Any artist</option>
-          {artistNames.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          name="requester"
-          defaultValue={sp.requester}
-          placeholder="Requester contains…"
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        />
-        <select
-          name="status"
-          defaultValue={sp.status ?? ""}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">Any status</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
-          name="songDatabaseId"
-          defaultValue={sp.songDatabaseId ?? ""}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">Any database</option>
-          {databases.map((db) => (
-            <option key={db.id} value={db.id}>
-              {db.name}
-            </option>
-          ))}
-        </select>
-        <DateRangeInputs dateFrom={sp.dateFrom} dateTo={sp.dateTo} />
-        {anyDateHref !== null && (
-          <a
-            href={`/dashboard/history${anyDateHref}`}
-            className="flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground-muted hover:text-accent hover:border-accent"
+        <Field label="Database">
+          <select name="songDatabaseId" defaultValue={sp.songDatabaseId ?? ""} className={CONTROL}>
+            <option value="">Any database</option>
+            {databases.map((db) => (
+              <option key={db.id} value={db.id}>
+                {db.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Status">
+          <select name="status" defaultValue={sp.status ?? ""} className={CONTROL}>
+            <option value="">Any status</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Tip">
+          <select name="tip" defaultValue={sp.tip ?? "any"} className={CONTROL}>
+            <option value="any">Any tip</option>
+            <option value="tipped">Tipped only</option>
+            <option value="untipped">Untipped only</option>
+          </select>
+        </Field>
+        <Field label="Song">
+          <select name="song" defaultValue={sp.song ?? ""} className={CONTROL}>
+            <option value="">Any song</option>
+            {songNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Artist">
+          <select name="artist" defaultValue={sp.artist ?? ""} className={CONTROL}>
+            <option value="">Any artist</option>
+            {artistNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Requester" className="sm:col-span-2">
+          <input
+            type="text"
+            name="requester"
+            defaultValue={sp.requester}
+            placeholder="Requester contains…"
+            className={CONTROL}
+          />
+        </Field>
+        <div className="sm:col-span-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-border pt-4">
+          <DateRangeInputs dateFrom={sp.dateFrom} dateTo={sp.dateTo} />
+          {anyDateHref !== null && (
+            <a
+              href={`/dashboard/history${anyDateHref}`}
+              className="rounded-lg border border-border px-3 py-2 text-sm text-foreground-muted hover:text-accent hover:border-accent"
+            >
+              Any date
+            </a>
+          )}
+          <button
+            type="submit"
+            className="sm:ml-auto rounded-lg bg-accent px-6 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
           >
-            Any date
-          </a>
-        )}
-        <select
-          name="tip"
-          defaultValue={sp.tip ?? "any"}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="any">Any tip</option>
-          <option value="tipped">Tipped only</option>
-          <option value="untipped">Untipped only</option>
-        </select>
-        <button
-          type="submit"
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-        >
-          Filter
-        </button>
+            Filter
+          </button>
+        </div>
       </form>
 
       <div className="flex justify-end">
@@ -210,6 +216,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
             <tr className="border-b border-border text-left text-xs text-foreground-muted">
               <th className="px-4 py-2 font-medium">Song</th>
               <th className="px-4 py-2 font-medium">Requester</th>
+              <th className="px-4 py-2 font-medium">Venue</th>
               <th className="px-4 py-2 font-medium">Database</th>
               <th className="px-4 py-2 font-medium">Tip</th>
               <th className="px-4 py-2 font-medium">Status</th>
@@ -228,6 +235,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                   <p>{item.billingName || item.requesterName}</p>
                   {item.wantsShoutOut && <p className="text-xs text-tip font-medium">⭐ Wants a shout-out</p>}
                 </td>
+                <td className="px-4 py-2 text-foreground-muted">{item.venueName ?? "—"}</td>
                 <td className="px-4 py-2 text-foreground-muted">{item.databaseName}</td>
                 <td className="px-4 py-2">
                   {item.tipAmountCents > 0 ? (
@@ -247,7 +255,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-foreground-muted">
+                <td colSpan={8} className="px-4 py-8 text-center text-foreground-muted">
                   No requests match those filters.
                 </td>
               </tr>
