@@ -11,8 +11,9 @@ const LOCAL_TZ = "Australia/Brisbane";
 const localCreatedAt = Prisma.sql`("createdAt" AT TIME ZONE ${LOCAL_TZ})`;
 
 // Search logs belong to a database, which belongs to a performer.
-function ownedBy(performerId: string) {
-  return Prisma.sql`AND "songDatabaseId" IN (SELECT "id" FROM "SongDatabase" WHERE "performerId" = ${performerId})`;
+function ownedBy(performerId: string, venueId?: string) {
+  const venue = venueId ? Prisma.sql`AND "venueId" = ${venueId}` : Prisma.sql``;
+  return Prisma.sql`${venue} AND "songDatabaseId" IN (SELECT "id" FROM "SongDatabase" WHERE "performerId" = ${performerId})`;
 }
 
 function dowFilter(daysOfWeek: number[] | undefined) {
@@ -25,11 +26,11 @@ function dowFilter(daysOfWeek: number[] | undefined) {
 // separate "most searched songs" / "most searched artists", this reports a
 // single "most searched terms" ranking. Faithful to how the actual UI works
 // rather than guessing at song-vs-artist intent from free text.
-export async function getMostSearchedTerms({ from, to, daysOfWeek, performerId }: StatsScope, limit = 20): Promise<SearchRanked[]> {
+export async function getMostSearchedTerms({ from, to, daysOfWeek, performerId, venueId }: StatsScope, limit = 20): Promise<SearchRanked[]> {
   const rows = await prisma.$queryRaw<{ term: string; count: bigint }[]>(Prisma.sql`
     SELECT LOWER("searchTerm") AS term, COUNT(*) AS count
     FROM "SearchLog"
-    WHERE "createdAt" BETWEEN ${from} AND ${to} ${ownedBy(performerId)} ${dowFilter(daysOfWeek)}
+    WHERE "createdAt" BETWEEN ${from} AND ${to} ${ownedBy(performerId, venueId)} ${dowFilter(daysOfWeek)}
     GROUP BY term
     ORDER BY count DESC
     LIMIT ${limit}
@@ -38,13 +39,13 @@ export async function getMostSearchedTerms({ from, to, daysOfWeek, performerId }
 }
 
 export async function getMostUnsuccessfulSearches(
-  { from, to, daysOfWeek, performerId }: StatsScope,
+  { from, to, daysOfWeek, performerId, venueId }: StatsScope,
   limit = 20
 ): Promise<SearchRanked[]> {
   const rows = await prisma.$queryRaw<{ term: string; count: bigint }[]>(Prisma.sql`
     SELECT LOWER("searchTerm") AS term, COUNT(*) AS count
     FROM "SearchLog"
-    WHERE "createdAt" BETWEEN ${from} AND ${to} ${ownedBy(performerId)} AND "resultsFound" = false ${dowFilter(daysOfWeek)}
+    WHERE "createdAt" BETWEEN ${from} AND ${to} ${ownedBy(performerId, venueId)} AND "resultsFound" = false ${dowFilter(daysOfWeek)}
     GROUP BY term
     ORDER BY count DESC
     LIMIT ${limit}
@@ -52,11 +53,11 @@ export async function getMostUnsuccessfulSearches(
   return rows.map((r) => ({ term: r.term, count: Number(r.count) }));
 }
 
-export async function getSearchTotals({ from, to, daysOfWeek, performerId }: StatsScope): Promise<{ total: number; unsuccessful: number }> {
+export async function getSearchTotals({ from, to, daysOfWeek, performerId, venueId }: StatsScope): Promise<{ total: number; unsuccessful: number }> {
   const rows = await prisma.$queryRaw<{ total: bigint; unsuccessful: bigint }[]>(Prisma.sql`
     SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE "resultsFound" = false) AS unsuccessful
     FROM "SearchLog"
-    WHERE "createdAt" BETWEEN ${from} AND ${to} ${ownedBy(performerId)} ${dowFilter(daysOfWeek)}
+    WHERE "createdAt" BETWEEN ${from} AND ${to} ${ownedBy(performerId, venueId)} ${dowFilter(daysOfWeek)}
   `);
   const row = rows[0];
   return { total: Number(row?.total ?? 0), unsuccessful: Number(row?.unsuccessful ?? 0) };
@@ -66,11 +67,11 @@ export type SearchLogRow = { searchTerm: string; resultsFound: boolean; eventTyp
 
 // Raw, per-search rows for the full CSV export (not aggregated like the
 // ranked lists above) — every logged search in range, newest first.
-export async function getSearchLogsForExport({ from, to, daysOfWeek, performerId }: StatsScope): Promise<SearchLogRow[]> {
+export async function getSearchLogsForExport({ from, to, daysOfWeek, performerId, venueId }: StatsScope): Promise<SearchLogRow[]> {
   return prisma.$queryRaw<SearchLogRow[]>(Prisma.sql`
     SELECT "searchTerm", "resultsFound", "eventType", "createdAt"
     FROM "SearchLog"
-    WHERE "createdAt" BETWEEN ${from} AND ${to} ${ownedBy(performerId)} ${dowFilter(daysOfWeek)}
+    WHERE "createdAt" BETWEEN ${from} AND ${to} ${ownedBy(performerId, venueId)} ${dowFilter(daysOfWeek)}
     ORDER BY "createdAt" DESC
   `);
 }

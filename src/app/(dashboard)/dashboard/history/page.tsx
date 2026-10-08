@@ -5,6 +5,8 @@ import type { RequestStatus } from "@/generated/prisma/client";
 import DeleteRequestButton from "./DeleteRequestButton";
 import DeleteAllButton from "./DeleteAllButton";
 import DateRangeInputs from "./DateRangeInputs";
+import VenueFilterSelect from "../VenueFilterSelect";
+import { getVenueFilter } from "@/lib/venueFilter";
 import LocalTime from "../../LocalTime";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,7 @@ type SearchParams = {
   songDatabaseId?: string;
   dateFrom?: string;
   dateTo?: string;
+  venueId?: string;
   tip?: string;
   cursor?: string;
   prevCursors?: string;
@@ -36,6 +39,7 @@ function buildQueryString(params: Record<string, string | undefined>): string {
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
   const performer = await getCurrentPerformer();
+  const { venues, venueId } = await getVenueFilter(performer.id, sp.venueId);
 
   const filters: HistoryFilters = {
     song: sp.song,
@@ -45,6 +49,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     songDatabaseId: sp.songDatabaseId,
     dateFrom: sp.dateFrom,
     dateTo: sp.dateTo,
+    venueId,
     tip: sp.tip === "tipped" || sp.tip === "untipped" ? sp.tip : "any",
   };
 
@@ -80,6 +85,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     songDatabaseId: sp.songDatabaseId,
     dateFrom: sp.dateFrom,
     dateTo: sp.dateTo,
+    venueId,
     tip: sp.tip,
   };
 
@@ -112,6 +118,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       </div>
 
       <form className="grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-lg border border-border bg-surface p-4">
+        <VenueFilterSelect venues={venues} selectedVenueId={venueId} />
         <select
           name="song"
           defaultValue={sp.song ?? ""}

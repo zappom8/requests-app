@@ -12,6 +12,7 @@ export type HistoryFilters = {
   songDatabaseId?: string;
   dateFrom?: string; // YYYY-MM-DD
   dateTo?: string; // YYYY-MM-DD
+  venueId?: string;
   tip?: "any" | "tipped" | "untipped";
 };
 
@@ -66,6 +67,7 @@ export function buildHistoryWhere(filters: HistoryFilters, performerId: string):
   }
   if (filters.status) where.status = filters.status;
   if (filters.songDatabaseId) where.songDatabaseId = filters.songDatabaseId;
+  if (filters.venueId) where.venueId = filters.venueId;
   if (filters.tip === "tipped") where.tipAmountCents = { gt: 0 };
   if (filters.tip === "untipped") where.tipAmountCents = 0;
 

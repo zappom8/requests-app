@@ -15,6 +15,8 @@ import {
   type RankedSong,
 } from "@/lib/statistics";
 import { getCurrentPerformer } from "@/lib/auth";
+import { getVenueFilter } from "@/lib/venueFilter";
+import VenueFilterSelect from "../VenueFilterSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -68,12 +70,13 @@ function LabelList({ title, rows, moneyValue = false }: { title: string; rows: R
 export default async function StatsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dateFrom?: string; dateTo?: string; days?: string | string[] }>;
+  searchParams: Promise<{ dateFrom?: string; dateTo?: string; days?: string | string[]; venueId?: string }>;
 }) {
   const sp = await searchParams;
   const selectedDays = sp.days === undefined ? [] : Array.isArray(sp.days) ? sp.days : [sp.days];
   const performer = await getCurrentPerformer();
-  const range = { ...resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays), performerId: performer.id };
+  const { venues, venueId } = await getVenueFilter(performer.id, sp.venueId);
+  const range = { ...resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays), performerId: performer.id, venueId };
 
   const [
     overview,
@@ -107,6 +110,7 @@ export default async function StatsPage({
       </div>
 
       <form className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface p-4">
+        <VenueFilterSelect venues={venues} selectedVenueId={venueId} />
         <div className="flex flex-col gap-1">
           <label className="text-xs text-foreground-muted">From</label>
           <input

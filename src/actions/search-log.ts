@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { resolveVenueId } from "@/lib/venueSchedule";
 
 export type SearchLogEventType = "debounce" | "submit" | "select";
 
@@ -18,8 +19,15 @@ export async function logSearch(input: {
   const searchTerm = input.searchTerm.trim();
   if (!searchTerm) return;
 
+  const db = await prisma.songDatabase.findUnique({
+    where: { id: input.songDatabaseId },
+    select: { performerId: true },
+  });
+  const venueId = db ? await resolveVenueId(db.performerId).catch(() => null) : null;
+
   await prisma.searchLog.create({
     data: {
+      venueId,
       songDatabaseId: input.songDatabaseId,
       searchTerm,
       resultsFound: input.resultsFound,

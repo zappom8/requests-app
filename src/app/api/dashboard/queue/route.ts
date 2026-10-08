@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminQueue } from "@/lib/queue";
-import { getActiveSongDatabaseId, getCurrentVenueId } from "@/lib/settings";
+import { getActiveSongDatabaseId } from "@/lib/settings";
+import { syncCurrentVenue } from "@/lib/venueSchedule";
 import { getBangerKeys } from "@/lib/bangers";
 import { getSignedInPerformer } from "@/lib/auth";
 
@@ -9,9 +10,11 @@ import { getSignedInPerformer } from "@/lib/auth";
 export async function GET() {
   const performer = await getSignedInPerformer();
   if (!performer) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Follows the gigs calendar (±1h around each gig, Busking otherwise), so a
+  // Live Queue left open across a gig start/end switches venue by itself.
   const [activeSongDatabaseId, currentVenueId] = await Promise.all([
     getActiveSongDatabaseId(performer.id),
-    getCurrentVenueId(performer.id),
+    syncCurrentVenue(performer.id),
   ]);
   const bangerKeys = await getBangerKeys(currentVenueId);
   if (!activeSongDatabaseId) {

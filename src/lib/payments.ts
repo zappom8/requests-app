@@ -4,6 +4,7 @@ import { Prisma } from "@/generated/prisma/client";
 export type PaymentFilters = {
   dateFrom?: string;
   dateTo?: string;
+  venueId?: string;
 };
 
 export type PaymentProvider = "stripe" | "square" | null;
@@ -38,6 +39,7 @@ function buildWhere(filters: PaymentFilters, performerId: string): Prisma.Reques
   const where: Prisma.RequestWhereInput = {
     songDatabase: { performerId },
     paymentStatus: { in: ["SUCCEEDED", "REFUNDED", "PARTIALLY_REFUNDED"] },
+    ...(filters.venueId ? { venueId: filters.venueId } : {}),
   };
   if (filters.dateFrom || filters.dateTo) {
     where.requestedAt = {

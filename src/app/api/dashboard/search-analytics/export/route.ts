@@ -3,6 +3,7 @@ import Papa from "papaparse";
 import { resolveDateRange } from "@/lib/statistics";
 import { getSearchLogsForExport } from "@/lib/search-analytics";
 import { getSignedInPerformer } from "@/lib/auth";
+import { getVenueFilter } from "@/lib/venueFilter";
 
 // Signed-out requests are rejected by src/proxy.ts; scoped to the caller's performer below. Carries
 // forward the same dateFrom/dateTo/days filters as the Search Analytics
@@ -16,7 +17,8 @@ export async function GET(request: NextRequest) {
   const days = sp.getAll("days");
   const range = resolveDateRange(sp.get("dateFrom") ?? undefined, sp.get("dateTo") ?? undefined, days);
 
-  const rows = await getSearchLogsForExport({ ...range, performerId: performer.id });
+  const { venueId } = await getVenueFilter(performer.id, sp.get("venueId") ?? undefined);
+  const rows = await getSearchLogsForExport({ ...range, performerId: performer.id, venueId });
 
   const csv = Papa.unparse({
     fields: ["Search Term", "Results Found", "Event Type", "Searched At"],

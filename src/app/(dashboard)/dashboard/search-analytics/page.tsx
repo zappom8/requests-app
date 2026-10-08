@@ -1,6 +1,8 @@
 import { resolveDateRange, DOW_LABELS } from "@/lib/statistics";
 import { getMostSearchedTerms, getMostUnsuccessfulSearches, getSearchTotals } from "@/lib/search-analytics";
 import { getCurrentPerformer } from "@/lib/auth";
+import { getVenueFilter } from "@/lib/venueFilter";
+import VenueFilterSelect from "../VenueFilterSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +11,13 @@ const LIMIT_OPTIONS = [20, 50, 100, 200];
 export default async function SearchAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dateFrom?: string; dateTo?: string; days?: string | string[]; limit?: string }>;
+  searchParams: Promise<{ dateFrom?: string; dateTo?: string; days?: string | string[]; limit?: string; venueId?: string }>;
 }) {
   const sp = await searchParams;
   const selectedDays = sp.days === undefined ? [] : Array.isArray(sp.days) ? sp.days : [sp.days];
   const performer = await getCurrentPerformer();
-  const range = { ...resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays), performerId: performer.id };
+  const { venues, venueId } = await getVenueFilter(performer.id, sp.venueId);
+  const range = { ...resolveDateRange(sp.dateFrom, sp.dateTo, selectedDays), performerId: performer.id, venueId };
   const limit = LIMIT_OPTIONS.includes(Number(sp.limit)) ? Number(sp.limit) : 20;
 
   const [totals, mostSearched, unsuccessful] = await Promise.all([
@@ -27,6 +30,7 @@ export default async function SearchAnalyticsPage({
   if (sp.dateFrom) exportParams.set("dateFrom", sp.dateFrom);
   if (sp.dateTo) exportParams.set("dateTo", sp.dateTo);
   for (const d of selectedDays) exportParams.append("days", d);
+  if (venueId) exportParams.set("venueId", venueId);
 
   return (
     <div className="space-y-6">
@@ -38,6 +42,7 @@ export default async function SearchAnalyticsPage({
       </div>
 
       <form className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface p-4">
+        <VenueFilterSelect venues={venues} selectedVenueId={venueId} />
         <div className="flex flex-col gap-1">
           <label className="text-xs text-foreground-muted">From</label>
           <input

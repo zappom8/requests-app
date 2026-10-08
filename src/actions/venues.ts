@@ -58,12 +58,28 @@ export async function setCurrentVenue(formData: FormData) {
 
   await prisma.settings.upsert({
     where: { performerId: performer.id },
-    update: { currentVenueId: venueId },
-    create: { performerId: performer.id, currentVenueId: venueId },
+    // A hand-picked venue holds until the next calendar gig window opens
+    // (src/lib/venueSchedule.ts); picking "no venue" hands back to auto.
+    update: { currentVenueId: venueId, currentVenueManualAt: venueId ? new Date() : null },
+    create: { performerId: performer.id, currentVenueId: venueId, currentVenueManualAt: venueId ? new Date() : null },
   });
 
   revalidatePath("/dashboard/queue");
   revalidatePath("/dashboard/bangers");
   const activeSongDatabaseId = await getActiveSongDatabaseId(performer.id);
   if (activeSongDatabaseId) await broadcastQueueChanged(activeSongDatabaseId);
+}
+
+// Comma-separated words, saved lowercase — see Venue.calendarKeywords.
+export async function setVenueCalendarKeywords(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("id is required");
+  const performer = await requirePerformer();
+  const keywords = String(formData.get("keywords") ?? "")
+    .split(",")
+    .map((k) => k.trim().toLowerCase())
+    .filter(Boolean);
+
+  await prisma.venue.updateMany({ where: { id, performerId: performer.id }, data: { calendarKeywords: keywords } });
+  revalidatePath("/dashboard/bangers");
 }

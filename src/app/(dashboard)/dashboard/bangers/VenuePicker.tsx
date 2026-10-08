@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createVenue, renameVenue, deleteVenue, setCurrentVenue } from "@/actions/venues";
+import { createVenue, renameVenue, deleteVenue, setCurrentVenue, setVenueCalendarKeywords } from "@/actions/venues";
 
-type Venue = { id: string; name: string };
+type Venue = { id: string; name: string; calendarKeywords: string[]; isBusking: boolean };
 
 export default function VenuePicker({
   venues,
@@ -89,6 +89,40 @@ export default function VenuePicker({
             Cancel
           </button>
         </form>
+      )}
+
+      {selected && !selected.isBusking && (
+        <form
+          key={selected.id}
+          className="space-y-1"
+          action={async (formData) => {
+            await setVenueCalendarKeywords(formData);
+            router.refresh();
+          }}
+        >
+          <input type="hidden" name="id" value={selected.id} />
+          <label className="text-xs text-foreground-muted">
+            Calendar keywords — a gigs-calendar event whose title or location contains any of these (comma-separated)
+            is a gig at this venue, and this venue switches on automatically from 1 hour before to 1 hour after it.
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              name="keywords"
+              defaultValue={selected.calendarKeywords.join(", ")}
+              placeholder="e.g. roamer"
+              className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+            <button type="submit" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-accent">
+              Save
+            </button>
+          </div>
+        </form>
+      )}
+      {selected?.isBusking && (
+        <p className="text-xs text-foreground-muted">
+          Busking is used automatically whenever no calendar gig is on (±1 hour).
+        </p>
       )}
 
       <form

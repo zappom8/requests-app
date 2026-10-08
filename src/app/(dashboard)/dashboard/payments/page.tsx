@@ -1,5 +1,7 @@
 import { getPayments } from "@/lib/payments";
 import { getCurrentPerformer } from "@/lib/auth";
+import { getVenueFilter } from "@/lib/venueFilter";
+import VenueFilterSelect from "../VenueFilterSelect";
 import RefundButton from "./RefundButton";
 import LocalTime from "../../LocalTime";
 
@@ -12,15 +14,20 @@ function money(cents: number) {
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dateFrom?: string; dateTo?: string }>;
+  searchParams: Promise<{ dateFrom?: string; dateTo?: string; venueId?: string }>;
 }) {
   const sp = await searchParams;
   const performer = await getCurrentPerformer();
-  const { items, totals } = await getPayments({ dateFrom: sp.dateFrom, dateTo: sp.dateTo }, performer.id);
+  const { venues, venueId } = await getVenueFilter(performer.id, sp.venueId);
+  const { items, totals } = await getPayments({ dateFrom: sp.dateFrom, dateTo: sp.dateTo, venueId }, performer.id);
 
   const exportHref = `/api/dashboard/payments/export${
-    sp.dateFrom || sp.dateTo
-      ? `?${new URLSearchParams({ ...(sp.dateFrom ? { dateFrom: sp.dateFrom } : {}), ...(sp.dateTo ? { dateTo: sp.dateTo } : {}) }).toString()}`
+    sp.dateFrom || sp.dateTo || venueId
+      ? `?${new URLSearchParams({
+          ...(sp.dateFrom ? { dateFrom: sp.dateFrom } : {}),
+          ...(sp.dateTo ? { dateTo: sp.dateTo } : {}),
+          ...(venueId ? { venueId } : {}),
+        }).toString()}`
       : ""
   }`;
 
@@ -51,6 +58,7 @@ export default async function PaymentsPage({
       </div>
 
       <form className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface p-4">
+        <VenueFilterSelect venues={venues} selectedVenueId={venueId} />
         <div className="flex flex-col gap-1">
           <label className="text-xs text-foreground-muted">From</label>
           <input

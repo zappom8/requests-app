@@ -135,6 +135,15 @@ model Venue {
   performer   Performer    @relation(fields: [performerId], references: [id])
   name        String
   bangers     BangerSong[]
+  // Words that, found in a calendar event's title or location, mark that
+  // event as a gig at this venue (lowercase, e.g. "roamer"). Calendar
+  // titles aren't consistent ("Gig at Roamer", "Roamer Brisbane"), so each
+  // venue lists its own spellings. Empty = never auto-selected.
+  calendarKeywords String[] @default([])
+  // The fallback venue used whenever no calendar gig is on (±1h).
+  isBusking   Boolean      @default(false)
+  requests    Request[]
+  searchLogs  SearchLog[]
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
 
@@ -312,6 +321,11 @@ model Request {
   // there's no single "request" that caused it.
   isBangerAddition Boolean @default(false)
 
+  // Venue the performer was at when this was requested (auto from the
+  // calendar, or chosen by hand) — what the stats venue filter reads.
+  venueId String?
+  venue   Venue?  @relation(fields: [venueId], references: [id], onDelete: SetNull)
+
   tipAmountCents        Int           @default(0)
   // Legacy Stripe-era payments — historical/audit only, no code path writes
   // these going forward. Kept alongside the Square fields rather than
@@ -329,6 +343,7 @@ model Request {
   @@index([songDatabaseId, status])
   @@index([status, songDatabaseId, requestedAt])
   @@index([triggeredByRequestId])
+  @@index([venueId, requestedAt])
 }
 
 model SearchLog {
@@ -343,9 +358,12 @@ model SearchLog {
   searchTerm     String
   resultsFound   Boolean
   eventType      String // 'debounce' | 'submit' | 'select'
+  venueId        String?
+  venue          Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
 
   @@index([createdAt])
+  @@index([venueId, createdAt])
   @@index([songDatabaseId, createdAt])
   @@index([searchTerm])
 }
@@ -360,6 +378,9 @@ model Settings {
   // string, no relation, same convention as activeSongDatabaseId (deleting
   // the venue just leaves this pointing at nothing, harmlessly).
   currentVenueId              String?
+  // When currentVenueId was last picked by hand on the Live Queue. A manual
+  // pick holds until the next calendar gig window opens (src/lib/venueSchedule.ts).
+  currentVenueManualAt        DateTime? @db.Timestamptz(3)
   // Which PerformerDevice (a forScore receiver — an iPad/iPhone running
   // the Shortcut) the forScore button sends to, from every controller. Plain
   // string like currentVenueId; a deleted device just falls back to "the
