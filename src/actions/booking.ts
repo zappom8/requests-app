@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { InquiryStatus } from "@/generated/prisma/client";
+import { sendNotificationEmail } from "@/lib/notify-email";
 import { getDefaultPerformer, requirePerformer } from "@/lib/auth";
 
 type ActionResult = { success: true } | { success: false; error: string };
@@ -34,16 +35,26 @@ export async function submitBookingInquiry(formData: FormData): Promise<ActionRe
   // Only the default performer has a public /book page so far.
   const performer = await getDefaultPerformer();
 
+  const phone = optionalString(formData, "phone");
+  const eventDate = optionalString(formData, "eventDate");
+  const location = optionalString(formData, "location");
+
   await prisma.bookingInquiry.create({
-    data: {
-      performerId: performer.id,
-      name,
-      email,
-      phone: optionalString(formData, "phone"),
-      eventDate: optionalString(formData, "eventDate"),
-      location: optionalString(formData, "location"),
+    data: { performerId: performer.id, name, email, phone, eventDate, location, message },
+  });
+
+  await sendNotificationEmail({
+    subject: `New booking inquiry from ${name}`,
+    replyTo: email,
+    text: [
+      `Name: ${name}`,
+      `Email: ${email}`,
+      `Phone: ${phone ?? "-"}`,
+      `Event date: ${eventDate ?? "-"}`,
+      `Location: ${location ?? "-"}`,
+      "",
       message,
-    },
+    ].join("\n"),
   });
 
   revalidatePath("/dashboard/bookings");
