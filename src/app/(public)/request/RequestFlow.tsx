@@ -445,13 +445,16 @@ export default function RequestFlow({
         </div>
       )}
 
-      <input
-        type="text"
-        value={searchQuery}
-        onChange={(e) => handleSearchChange(e.target.value)}
-        placeholder="Search songs or artists…"
-        className="rounded-lg border border-border bg-surface px-3 py-3 text-base outline-none focus:border-accent"
-      />
+      {/* Sticky so the search box stays reachable while scrolling a long list. */}
+      <div className="sticky top-0 z-10 -mx-4 -my-2 bg-background px-4 py-2">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Search songs or artists…"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-3 text-base outline-none focus:border-accent"
+        />
+      </div>
 
       {!searchQuery.trim() && (
         <div className="flex gap-2">
