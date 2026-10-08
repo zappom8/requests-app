@@ -86,3 +86,10 @@ export async function resendBookingInquiryEmail(id: string): Promise<ActionResul
   const sent = await sendNotificationEmail(inquiryEmail(inquiry));
   return sent ? { success: true } : { success: false, error: "Couldn't send the email." };
 }
+
+export async function deleteBookingInquiry(id: string): Promise<ActionResult> {
+  const performer = await requirePerformer();
+  await prisma.bookingInquiry.deleteMany({ where: { id, performerId: performer.id } });
+  revalidatePath("/dashboard/bookings");
+  return { success: true };
+}
