@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentPerformer } from "@/lib/auth";
 import BookingStatusSelect from "./BookingStatusSelect";
+import ResendEmailButton from "./ResendEmailButton";
 import LocalTime from "../../LocalTime";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function BookingsPage() {
                   <span className="text-xs text-foreground-muted">
                     <LocalTime iso={inquiry.createdAt.toISOString()} />
                   </span>
+                  <ResendEmailButton id={inquiry.id} />
                   <BookingStatusSelect id={inquiry.id} status={inquiry.status} />
                 </div>
               </div>

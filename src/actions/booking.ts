@@ -13,6 +13,29 @@ function optionalString(formData: FormData, key: string): string | null {
   return value || null;
 }
 
+function inquiryEmail(i: {
+  name: string;
+  email: string;
+  phone: string | null;
+  eventDate: string | null;
+  location: string | null;
+  message: string;
+}) {
+  return {
+    subject: `New booking inquiry from ${i.name}`,
+    replyTo: i.email,
+    text: [
+      `Name: ${i.name}`,
+      `Email: ${i.email}`,
+      `Phone: ${i.phone ?? "-"}`,
+      `Event date: ${i.eventDate ?? "-"}`,
+      `Location: ${i.location ?? "-"}`,
+      "",
+      i.message,
+    ].join("\n"),
+  };
+}
+
 export async function submitBookingInquiry(formData: FormData): Promise<ActionResult> {
   // Honeypot — a real visitor never sees or fills this field (hidden off-
   // screen on the form), so anything landing here is a bot. Silently accept
@@ -43,19 +66,7 @@ export async function submitBookingInquiry(formData: FormData): Promise<ActionRe
     data: { performerId: performer.id, name, email, phone, eventDate, location, message },
   });
 
-  await sendNotificationEmail({
-    subject: `New booking inquiry from ${name}`,
-    replyTo: email,
-    text: [
-      `Name: ${name}`,
-      `Email: ${email}`,
-      `Phone: ${phone ?? "-"}`,
-      `Event date: ${eventDate ?? "-"}`,
-      `Location: ${location ?? "-"}`,
-      "",
-      message,
-    ].join("\n"),
-  });
+  await sendNotificationEmail(inquiryEmail({ name, email, phone, eventDate, location, message }));
 
   revalidatePath("/dashboard/bookings");
   return { success: true };
@@ -66,4 +77,12 @@ export async function updateBookingInquiryStatus(id: string, status: InquiryStat
   await prisma.bookingInquiry.updateMany({ where: { id, performerId: performer.id }, data: { status } });
   revalidatePath("/dashboard/bookings");
   return { success: true };
+}
+
+export async function resendBookingInquiryEmail(id: string): Promise<ActionResult> {
+  const performer = await requirePerformer();
+  const inquiry = await prisma.bookingInquiry.findFirst({ where: { id, performerId: performer.id } });
+  if (!inquiry) return { success: false, error: "Inquiry not found." };
+  const sent = await sendNotificationEmail(inquiryEmail(inquiry));
+  return sent ? { success: true } : { success: false, error: "Couldn't send the email." };
 }

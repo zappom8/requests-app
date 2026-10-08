@@ -1,16 +1,16 @@
 // Sends a plain-text notification email through Resend's HTTP API (no SDK).
-// Never throws: a failed email must not lose or block the enquiry itself —
+// Returns whether it was sent. Never throws: a failed email must not lose or block the enquiry itself —
 // the inquiry is already saved and shows on the dashboard.
 export async function sendNotificationEmail(opts: {
   subject: string;
   text: string;
   replyTo?: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.NOTIFY_EMAIL_TO;
   if (!apiKey || !to) {
     console.warn("[notify-email] RESEND_API_KEY / NOTIFY_EMAIL_TO not set — skipping email");
-    return;
+    return false;
   }
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -25,7 +25,9 @@ export async function sendNotificationEmail(opts: {
       }),
     });
     if (!res.ok) console.error("[notify-email] Resend error", res.status, await res.text());
+    return res.ok;
   } catch (e) {
     console.error("[notify-email] failed to send", e);
+    return false;
   }
 }
