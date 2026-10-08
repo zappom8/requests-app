@@ -332,6 +332,23 @@ export default function LiveQueueList({
   // hidden from this view until Banger Mode is switched off again.
   const displayedQueue = computeDisplayedQueue(queue, bangerMode, bangerKeys);
 
+  // End of the gig: mark everything still queued as played, as one batch.
+  async function clearQueueAtEndOfGig() {
+    const ids = queueRef.current.flatMap((item) => item.requestIds);
+    if (ids.length === 0) {
+      showForScoreNotice("The queue is already empty", true);
+      return;
+    }
+    const count = queueRef.current.length;
+    setQueue([]); // optimistic
+    try {
+      await markPlayed(ids, songDatabaseIdRef.current);
+      showForScoreNotice(`Gig ended: ${count} request${count === 1 ? "" : "s"} marked played`, true);
+    } catch {
+      showForScoreNotice("Couldn't clear the queue — check the connection", false);
+    }
+  }
+
   // Laptop workflow: cycling through the live queue at a gig, hands on the
   // keyboard. Arrow keys move a highlighted selection across/down the grid
   // (so you're not stuck only ever acting on the top card — e.g. skip past
@@ -341,6 +358,13 @@ export default function LiveQueueList({
   // the refs above for why) rather than depending on queue/pendingActionId/etc.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      // The guitar pad's End gig presses Ctrl+Alt+Shift+P: mark EVERY request in the queue
+      // played in one go (banger additions included), so the queue is empty for the next gig.
+      if (e.ctrlKey && e.altKey && e.shiftKey && e.code === "KeyP") {
+        e.preventDefault();
+        void clearQueueAtEndOfGig();
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       // Don't hijack keys while a real form control has focus (e.g. the
       // venue <select> uses arrow keys itself to change its own value).
