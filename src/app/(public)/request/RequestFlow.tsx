@@ -8,6 +8,34 @@ import type { SongResult } from "@/lib/search";
 import PaymentStep from "./PaymentStep";
 import PromoLinks from "../PromoLinks";
 
+// The requester's name is remembered on their own device for 3 hours from
+// their first submitted request, so a repeat request is pre-filled (still
+// editable). Later submissions update the name but not the clock.
+const NAME_STORAGE_KEY = "requesterName";
+const NAME_TTL_MS = 3 * 60 * 60 * 1000;
+
+function readSavedName(): { name: string; firstAt: number } | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAME_STORAGE_KEY) ?? "null");
+    if (saved && typeof saved.name === "string" && typeof saved.firstAt === "number") {
+      if (Date.now() - saved.firstAt < NAME_TTL_MS) return saved;
+      localStorage.removeItem(NAME_STORAGE_KEY);
+    }
+  } catch {
+    // storage unavailable (private mode etc.) — just don't remember
+  }
+  return null;
+}
+
+function saveName(name: string) {
+  try {
+    const firstAt = readSavedName()?.firstAt ?? Date.now();
+    localStorage.setItem(NAME_STORAGE_KEY, JSON.stringify({ name, firstAt }));
+  } catch {
+    // ignore
+  }
+}
+
 type Props = {
   songDatabaseId: string;
   initialSongs: SongResult[];
@@ -146,6 +174,7 @@ export default function RequestFlow({
 
   function goToDetails(song: SongResult) {
     browseScrollRef.current = window.scrollY;
+    setRequesterName(readSavedName()?.name ?? "");
     setSelectedSong(song);
     setStep("details");
     setError(null);
@@ -221,6 +250,7 @@ export default function RequestFlow({
           setError(result.error);
           return;
         }
+        saveName(requesterName.trim());
         setStep("confirmation");
         return;
       }
@@ -249,6 +279,7 @@ export default function RequestFlow({
         setError(result.error);
         return;
       }
+      saveName(requesterName.trim());
       setCreatedRequestId(result.id);
       setStep("payment");
     } catch (e) {
