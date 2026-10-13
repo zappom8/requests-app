@@ -40,3 +40,16 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Square's Web Payments SDK doesn't draw the Apple Pay button — the page
+   must style the container as Apple's native button (Safari only). White
+   style so it stands out on the dark page. */
+@supports (-webkit-appearance: -apple-pay-button) {
+  #apple-pay-button {
+    -webkit-appearance: -apple-pay-button;
+    -apple-pay-button-type: plain;
+    -apple-pay-button-style: white;
+    width: 100%;
+    border-radius: 0.5rem;
+  }
+}
