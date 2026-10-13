@@ -74,15 +74,19 @@ export default function PaymentStep({
           total: { amount: (amountCents / 100).toFixed(2), label: "Tip" },
         });
 
+        let applePayOk = false;
         try {
           const applePay = await payments.applePay(paymentRequest);
           if (cancelled) {
             await applePay.destroy();
           } else {
             localApplePay = applePay;
-            await applePay.attach("#apple-pay-button");
+            // Square: Apple Pay is NOT attached like the card field — the page
+            // styles #apple-pay-button itself (globals.css) and its onClick
+            // calls tokenize().
             if (!cancelled) {
               applePayRef.current = applePay;
+              applePayOk = true;
               setApplePayAvailable(true);
             }
           }
@@ -90,20 +94,24 @@ export default function PaymentStep({
           // Apple Pay unavailable (non-Safari, no card in Wallet, etc.) — hide it, card still works.
         }
 
-        try {
-          const googlePay = await payments.googlePay(paymentRequest);
-          if (cancelled) {
-            await googlePay.destroy();
-          } else {
-            localGooglePay = googlePay;
-            await googlePay.attach("#google-pay-button");
-            if (!cancelled) {
-              googlePayRef.current = googlePay;
-              setGooglePayAvailable(true);
+        // On an Apple device Apple Pay is the wallet — Safari would otherwise
+        // also offer a Google Pay button that bounces to a Google page.
+        if (!applePayOk) {
+          try {
+            const googlePay = await payments.googlePay(paymentRequest);
+            if (cancelled) {
+              await googlePay.destroy();
+            } else {
+              localGooglePay = googlePay;
+              await googlePay.attach("#google-pay-button");
+              if (!cancelled) {
+                googlePayRef.current = googlePay;
+                setGooglePayAvailable(true);
+              }
             }
+          } catch {
+            // Google Pay unavailable — hide it, card still works.
           }
-        } catch {
-          // Google Pay unavailable — hide it, card still works.
         }
 
         if (!cancelled) setCardReady(true);
@@ -123,7 +131,7 @@ export default function PaymentStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handlePay(method: SquarePaymentMethod | null) {
+  async function handlePay(method: SquarePaymentMethod | null, isWallet = false) {
     if (!method) return;
     setSubmitting(true);
     setError(null);
@@ -141,7 +149,9 @@ export default function PaymentStep({
     };
 
     try {
-      const result = await method.tokenize(verificationDetails);
+      // Wallets (Apple/Google Pay) tokenize with no arguments; only the card
+      // field takes the buyer-verification details.
+      const result = isWallet ? await method.tokenize() : await method.tokenize(verificationDetails);
       if (result.status !== "OK" || !result.token) {
         throw new Error(result.errors?.[0]?.message ?? "Payment method wasn't accepted. Please try again.");
       }
@@ -175,12 +185,12 @@ export default function PaymentStep({
         <div className={applePayAvailable || googlePayAvailable ? "flex flex-col gap-2" : "h-0 overflow-hidden"}>
           <div
             id="apple-pay-button"
-            onClick={() => handlePay(applePayRef.current)}
+            onClick={() => handlePay(applePayRef.current, true)}
             className={applePayAvailable ? "h-12 rounded-lg overflow-hidden cursor-pointer" : "h-0 overflow-hidden"}
           />
           <div
             id="google-pay-button"
-            onClick={() => handlePay(googlePayRef.current)}
+            onClick={() => handlePay(googlePayRef.current, true)}
             className={googlePayAvailable ? "h-12 rounded-lg overflow-hidden cursor-pointer" : "h-0 overflow-hidden"}
           />
           {(applePayAvailable || googlePayAvailable) && (
