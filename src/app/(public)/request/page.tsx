@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveSongDatabaseId } from "@/lib/settings";
 import { getDefaultPerformer } from "@/lib/auth";
 import RequestFlow from "./RequestFlow";
+import { parseTipThanksTiers } from "@/lib/tipThanks";
 
 // Must always reflect the current active database and its current songs —
 // never statically cached.
@@ -31,7 +32,7 @@ export default async function RequestPage() {
     }),
     prisma.settings.findUnique({
       where: { performerId: performer.id },
-      select: { defaultTipAmountsCents: true, disableRecentlyPlayedPrompt: true },
+      select: { defaultTipAmountsCents: true, disableRecentlyPlayedPrompt: true, tipThankYouTiers: true },
     }),
     prisma.request.findMany({
       // isPairedAddition/isBangerAddition excluded — an auto-added song was
@@ -71,6 +72,7 @@ export default async function RequestPage() {
       tipPresetsCents={settings?.defaultTipAmountsCents ?? [500, 1000, 2000]}
       recentlyPlayed={recentlyPlayed}
       recentlyPlayedPromptEnabled={!settings?.disableRecentlyPlayedPrompt}
+      tipThankYouTiers={parseTipThanksTiers(settings?.tipThankYouTiers)}
     />
   );
 }

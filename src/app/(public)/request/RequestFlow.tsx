@@ -7,6 +7,7 @@ import { logSearch } from "@/actions/search-log";
 import type { SongResult } from "@/lib/search";
 import PaymentStep from "./PaymentStep";
 import PromoLinks from "../PromoLinks";
+import { pickTipThanks, type TipThanksTier } from "@/lib/tipThanks";
 
 // The requester's name is remembered on their own device for 3 hours from
 // their first submitted request, so a repeat request is pre-filled (still
@@ -44,6 +45,7 @@ type Props = {
   tipPresetsCents: number[];
   recentlyPlayed: Record<string, string>;
   recentlyPlayedPromptEnabled: boolean;
+  tipThankYouTiers: TipThanksTier[];
 };
 
 type Step = "browse" | "details" | "payment" | "confirmation";
@@ -58,6 +60,7 @@ export default function RequestFlow({
   tipPresetsCents,
   recentlyPlayed,
   recentlyPlayedPromptEnabled,
+  tipThankYouTiers,
 }: Props) {
   const tipPresets = tipPresetsCents.map((cents) => ({ cents, label: `$${(cents / 100).toFixed(0)}` }));
   const [step, setStep] = useState<Step>("browse");
@@ -70,6 +73,8 @@ export default function RequestFlow({
   const [selectedSong, setSelectedSong] = useState<SongResult | null>(null);
 
   const [requesterName, setRequesterName] = useState("");
+  // True once a tip payment has actually gone through (not just a free request).
+  const [tipPaid, setTipPaid] = useState(false);
   const [giveShoutOut, setGiveShoutOut] = useState(false);
   const [tipOption, setTipOption] = useState<TipOption>(null);
   const [otherAmountDollars, setOtherAmountDollars] = useState("");
@@ -208,6 +213,7 @@ export default function RequestFlow({
     setTipOption(null);
     setOtherAmountDollars("");
     setCreatedRequestId(null);
+    setTipPaid(false);
     setError(null);
     // Otherwise (Back) search query/results and browse mode are kept as-is —
     // see browseScrollRef above, same reasoning.
@@ -251,6 +257,7 @@ export default function RequestFlow({
           return;
         }
         saveName(requesterName.trim());
+        setTipPaid(false);
         setStep("confirmation");
         return;
       }
@@ -290,9 +297,17 @@ export default function RequestFlow({
   }
 
   if (step === "confirmation") {
+    const thankYou = tipPaid ? pickTipThanks(tipThankYouTiers, tipAmountCents) : null;
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-6">
-        <h1 className="text-2xl font-semibold">Request received!</h1>
+        {tipPaid ? (
+          <div className="flex flex-col gap-3 max-w-xs">
+            <h1 className="text-2xl font-semibold">Thank you!</h1>
+            {thankYou && <p className="text-lg">{thankYou}</p>}
+          </div>
+        ) : (
+          <h1 className="text-2xl font-semibold">Request received!</h1>
+        )}
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <button
             onClick={() => backToBrowse(true)}
@@ -323,7 +338,10 @@ export default function RequestFlow({
         requestId={createdRequestId}
         requesterName={requesterName}
         amountCents={tipAmountCents}
-        onSuccess={() => setStep("confirmation")}
+        onSuccess={() => {
+          setTipPaid(true);
+          setStep("confirmation");
+        }}
         onBack={() => setStep("details")}
       />
     );

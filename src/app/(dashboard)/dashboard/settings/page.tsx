@@ -4,6 +4,8 @@ import { updateSettings } from "@/actions/settings";
 import ImageUploadForm from "./ImageUploadForm";
 import ForScoreReceiverSettings from "./ForScoreReceiverSettings";
 import AbletonReceiverSettings from "./AbletonReceiverSettings";
+import TipThanksEditor from "./TipThanksEditor";
+import { parseTipThanksTiers } from "@/lib/tipThanks";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +92,8 @@ export default async function SettingsPage() {
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
           />
         </div>
+
+        <TipThanksEditor initial={parseTipThanksTiers(settings?.tipThankYouTiers)} />
 
         <h2 className="text-sm font-medium pt-2">Brand Colours</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

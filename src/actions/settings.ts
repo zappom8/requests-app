@@ -1,5 +1,6 @@
 "use server";
 
+import type { TipThanksTier } from "@/lib/tipThanks";
 import { prisma } from "@/lib/prisma";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -56,6 +57,15 @@ export async function updateSettings(formData: FormData) {
   const brandPrimaryColor = optionalString(formData, "brandPrimaryColor");
   const brandSecondaryColor = optionalString(formData, "brandSecondaryColor");
   const disableRecentlyPlayedPrompt = formData.get("disableRecentlyPlayedPrompt") === "on";
+  // Parallel lists from the Settings editor (one entry per row); rows with
+  // no message or no valid amount are dropped. An empty result is saved as []
+  // (= no messages), distinct from NULL (= defaults).
+  const tierMins = formData.getAll("tierMin").map(String);
+  const tierMessages = formData.getAll("tierMessage").map(String);
+  const tipThankYouTiers: TipThanksTier[] = tierMins
+    .map((min, i) => ({ minCents: Math.round(parseFloat(min) * 100), message: (tierMessages[i] ?? "").trim().slice(0, 200) }))
+    .filter((t) => Number.isFinite(t.minCents) && t.minCents >= 0 && t.message)
+    .sort((a, b) => a.minCents - b.minCents);
   const gigsCalendarUrls = String(formData.get("gigsCalendarUrls") ?? "")
     .split("\n")
     .map((s) => s.trim())
@@ -81,6 +91,7 @@ export async function updateSettings(formData: FormData) {
       brandPrimaryColor,
       brandSecondaryColor,
       disableRecentlyPlayedPrompt,
+      tipThankYouTiers,
       gigsCalendarUrls,
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
@@ -97,6 +108,7 @@ export async function updateSettings(formData: FormData) {
       brandPrimaryColor,
       brandSecondaryColor,
       disableRecentlyPlayedPrompt,
+      tipThankYouTiers,
       gigsCalendarUrls,
       ...(defaultTipAmountsCents.length > 0 ? { defaultTipAmountsCents } : {}),
     },
