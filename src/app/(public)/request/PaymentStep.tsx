@@ -169,25 +169,24 @@ export default function PaymentStep({
       </div>
 
       <div className="flex flex-col gap-4">
-        {(applePayAvailable || googlePayAvailable) && (
-          <div className="flex flex-col gap-2">
-            {applePayAvailable && (
-              <div
-                id="apple-pay-button"
-                onClick={() => handlePay(applePayRef.current)}
-                className="h-12 rounded-lg overflow-hidden cursor-pointer"
-              />
-            )}
-            {googlePayAvailable && (
-              <div
-                id="google-pay-button"
-                onClick={() => handlePay(googlePayRef.current)}
-                className="h-12 rounded-lg overflow-hidden cursor-pointer"
-              />
-            )}
+        {/* The wallet-button containers must already be in the DOM when the
+            SDK's attach() runs (before we know the wallet is available), so
+            they're always rendered and just collapsed until it is. */}
+        <div className={applePayAvailable || googlePayAvailable ? "flex flex-col gap-2" : "h-0 overflow-hidden"}>
+          <div
+            id="apple-pay-button"
+            onClick={() => handlePay(applePayRef.current)}
+            className={applePayAvailable ? "h-12 rounded-lg overflow-hidden cursor-pointer" : "h-0 overflow-hidden"}
+          />
+          <div
+            id="google-pay-button"
+            onClick={() => handlePay(googlePayRef.current)}
+            className={googlePayAvailable ? "h-12 rounded-lg overflow-hidden cursor-pointer" : "h-0 overflow-hidden"}
+          />
+          {(applePayAvailable || googlePayAvailable) && (
             <p className="text-xs text-foreground-muted text-center">— or pay with card —</p>
-          </div>
-        )}
+          )}
+        </div>
 
         <div id="square-card-container" className="rounded-lg border border-border bg-surface p-3" />
         {error && <p className="text-sm text-danger">{error}</p>}
