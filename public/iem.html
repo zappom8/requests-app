@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d10">
+<meta name="robots" content="noindex,nofollow">
+<title>South Pine IEM</title>
+<style>
+  :root {
+    --bg: #0b0d10; --panel: #151a20; --edge: #252c35; --text: #e8edf2; --dim: #8593a3;
+    --accent: #ff8a3d; --mute: #e5484d; --ok: #3ccf91; --warn: #f5b942;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overscroll-behavior: none;
+    font: 15px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
+  #app { display: flex; flex-direction: column; height: 100%; padding: env(safe-area-inset-top) 10px calc(env(safe-area-inset-bottom) + 8px); }
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 2px; }
+  #tabs { display: flex; gap: 6px; flex: 1; min-width: 0; }
+  #tabs button { flex: 1; min-width: 0; padding: 9px 4px; border-radius: 10px; border: 1px solid var(--edge); background: var(--panel); color: var(--dim); font: inherit; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+  #tabs button.on { color: #111; }
+  .chip { font-size: 12px; padding: 5px 9px; border-radius: 99px; background: var(--panel); border: 1px solid var(--edge); color: var(--dim); }
+  .chip.ok { color: var(--ok); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--mute); }
+  #switch { background: none; border: 1px solid var(--edge); color: var(--dim); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  #hint { display: none; text-align: center; font-size: 12px; color: var(--dim); padding: 0 0 6px; }
+  #banner { display: none; padding: 9px 12px; margin-bottom: 8px; border-radius: 10px; font-size: 13px; line-height: 1.35; }
+  #banner.warn { display: block; background: #3a2d10; color: var(--warn); }
+  #banner.bad { display: block; background: #3a1417; color: #ff9aa0; }
+  #strips { flex: 1; min-height: 0; display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+  #strips::-webkit-scrollbar { display: none; }
+  .strip { flex: 1 0 54px; min-width: 54px; display: flex; flex-direction: column; gap: 8px; background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 8px 4px; }
+  .strip.master { flex: 1.25 0 68px; min-width: 68px; border-color: var(--accent); margin-left: 4px; position: sticky; right: 0; z-index: 2; box-shadow: -8px 0 10px -4px #0b0d10; }
+  .name { text-align: center; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mute { height: 46px; padding: 0; border-radius: 10px; border: 1px solid var(--edge); background: #1d242c; color: var(--dim); font-weight: 700; font-size: 11px; letter-spacing: 0; }
+  .mute.on { background: var(--mute); border-color: var(--mute); color: #fff; }
+  .fader { flex: 1; min-height: 0; position: relative; touch-action: none; border-radius: 10px; background: #0e1217; overflow: hidden; }
+  .fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, #2b3947, #3b5068); }
+  .master .fill { background: linear-gradient(to top, color-mix(in srgb, var(--accent) 35%, #0e1217), var(--accent)); }
+  .cap { position: absolute; left: 4px; right: 4px; height: 14px; margin-bottom: -7px; border-radius: 6px; background: var(--text); box-shadow: 0 1px 6px #0009; }
+  .muted .fill { background: #3a1417; } .muted .cap { background: #8a5a5d; }
+  .read { text-align: center; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; height: 14px; }
+  #lock { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 30px;
+    background: #0b0d10d9; color: var(--text); font-size: 17px; line-height: 1.4; z-index: 5; }
+  #lock small { display: block; margin-top: 10px; color: var(--dim); font-size: 14px; }
+  #lock button { margin-top: 16px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--edge); background: var(--panel); color: var(--text); font-size: 15px; }
+  #login { position: fixed; inset: 0; display: none; flex-direction: column; gap: 12px; justify-content: center; padding: 30px; background: var(--bg); z-index: 10; }
+  #login h1 { font-size: 20px; text-align: center; color: var(--dim); margin: 0 0 8px; }
+  #login input, #login button { font: inherit; font-size: 18px; padding: 16px; border-radius: 12px; border: 1px solid var(--edge); background: var(--panel); color: var(--text); }
+  #login button { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 700; }
+  #loginErr { color: #ff9aa0; text-align: center; min-height: 20px; font-size: 14px; }
+  #choose { position: fixed; inset: 0; display: none; flex-direction: column; gap: 14px; justify-content: center; padding: 30px; background: var(--bg); z-index: 9; }
+  #choose h1 { font-size: 18px; color: var(--dim); font-weight: 600; text-align: center; margin: 0 0 6px; }
+  #choose button { padding: 28px; font-size: 26px; font-weight: 700; border-radius: 18px; border: 2px solid; background: var(--panel); color: var(--text); }
+  #choose .cancel { font-size: 15px; padding: 12px; border: 0; color: var(--dim); background: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div id="tabs"></div>
+    <span class="chip" id="state">connecting</span>
+  </header>
+  <div id="banner"></div>
+  <div id="hint">Swipe the channel strips sideways for more →</div>
+  <div id="strips"></div>
+</div>
+<div id="lock"><div><span id="lockTitle">Reconnecting to the bridge…</span><small id="lockSub">Your mix is unaffected. Audio keeps running on the interface. Faders are locked until you're back.</small><button id="relogin" style="display:none">Sign in again</button></div></div>
+<form id="login"><h1>South Pine IEM</h1><input id="pw" type="password" placeholder="Password" autocomplete="current-password" autocapitalize="none" autocorrect="off"><button>Enter</button><div id="loginErr"></div></form>
+<div id="choose"></div>
+
+<script src="/iem-mode.js"></script>
+<script src="/iem-supabase.js"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  let S = null;                 // latest server snapshot
+  let mixId = null;             // which mix this phone controls
+  let online = false;
+  const dragging = new Set();   // keys under a finger right now
+  const els = new Map();        // key -> {fill, cap, read, mute, strip}
+  let builtFor = '';
+
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+  };
+
+  // ---- dB readout (only when calibrated in /setup) -------------------------------------------------
+  function dbAt(midi) {
+    const cal = S.config.calibration;
+    if (!cal || cal.length < 2) return null;
+    if (midi <= cal[0].midi) return cal[0].db;
+    for (let i = 1; i < cal.length; i++) {
+      if (midi <= cal[i].midi) { const a = cal[i - 1], b = cal[i]; return a.db + (b.db - a.db) * (midi - a.midi) / (b.midi - a.midi); }
+    }
+    return cal.at(-1).db;
+  }
+  function readout(pos, max) {
+    if (pos <= 0.001) return '–∞';
+    const db = dbAt(pos * max);
+    return db === null ? Math.round(pos * 100) + '%' : (db > 0 ? '+' : '') + db.toFixed(1);
+  }
+
+  // ---- sending ---------------------------------------------------------------------------------------
+  const pending = new Map(); // key -> timer
+  const lastSent = new Map();
+  function setLevel(ch, level) {
+    const key = ch;
+    lastSent.set(key, level);
+    if (pending.has(key)) return;
+    pending.set(key, setTimeout(() => {
+      pending.delete(key);
+      transport.set({ mix: mixId, ch, level: lastSent.get(key) });
+    }, transport.throttleMs));
+  }
+
+  // ---- ui build ------------------------------------------------------------------------------------------
+  function build() {
+    const mix = S.config.mixes.find((m) => m.id === mixId);
+    $('#tabs').innerHTML = '';
+    for (const m of S.config.mixes) {
+      const b = document.createElement('button'); b.textContent = m.name;
+      const on = m.id === mixId;
+      b.className = on ? 'on' : ''; if (on) { b.style.background = m.color; b.style.borderColor = m.color; }
+      b.onclick = () => { if (m.id === mixId) return; mixId = m.id; store.set('mix', m.id); history.replaceState(null, '', '#' + m.id); builtFor = ''; apply(S); };
+      $('#tabs').appendChild(b);
+    }
+    document.documentElement.style.setProperty('--accent', mix.color);
+    const root = $('#strips');
+    root.innerHTML = '';
+    els.clear();
+    const items = [...S.config.channels.map((c) => ({ id: c.id, name: c.name })), { id: 'master', name: 'MASTER', master: true }];
+    for (const it of items) {
+      const strip = document.createElement('div');
+      strip.className = 'strip' + (it.master ? ' master' : '');
+      strip.innerHTML = `<div class="name"></div><button class="mute">${it.master ? 'MUTE ALL' : 'MUTE'}</button><div class="fader"><div class="fill"></div><div class="cap"></div></div><div class="read"></div>`;
+      strip.querySelector('.name').textContent = it.name;
+      const fader = strip.querySelector('.fader');
+      const e = { strip, fader, fill: strip.querySelector('.fill'), cap: strip.querySelector('.cap'), read: strip.querySelector('.read'), mute: strip.querySelector('.mute'), master: !!it.master };
+      els.set(it.id, e);
+      e.mute.addEventListener('click', () => {
+        if (!online) return;
+        const t = target(it.id); t.mute = !t.mute; render();
+        transport.set({ mix: mixId, ch: it.id, mute: t.mute });
+      });
+      attachDrag(it.id, fader);
+      root.appendChild(strip);
+    }
+  }
+
+  const target = (id) => (id === 'master' ? S.mixes[mixId].master : S.mixes[mixId].ch[id]);
+
+  // Relative drag: the fader moves by how far your finger moves, never jumps to where you touch.
+  function attachDrag(id, fader) {
+    let startY = 0, startPos = 0, pid = null;
+    fader.addEventListener('pointerdown', (ev) => {
+      if (!online || pid !== null) return;
+      pid = ev.pointerId; fader.setPointerCapture(pid);
+      startY = ev.clientY; startPos = target(id).level; dragging.add(id);
+    });
+    fader.addEventListener('pointermove', (ev) => {
+      if (ev.pointerId !== pid) return;
+      const h = fader.getBoundingClientRect().height;
+      const pos = Math.max(0, Math.min(1, startPos + (startY - ev.clientY) / h));
+      target(id).level = pos; render(); setLevel(id, pos);
+    });
+    const end = (ev) => { if (ev.pointerId !== pid) return; pid = null; dragging.delete(id); };
+    fader.addEventListener('pointerup', end);
+    fader.addEventListener('pointercancel', end);
+  }
+
+  function updateHint() {
+    const st = $('#strips'), h = $('#hint');
+    h.style.display = (!hintDone && st.scrollWidth > st.clientWidth + 4) ? 'block' : 'none';
+  }
+  let hintDone = false;
+  $('#strips').addEventListener('scroll', () => { if ($('#strips').scrollLeft > 10) { hintDone = true; updateHint(); } }, { passive: true });
+
+  function render() {
+    if (!S || !mixId) return;
+    for (const [id, e] of els) {
+      const t = target(id);
+      const max = id === 'master' ? S.config.limits.masterMax : S.config.limits.channelMax;
+      const pct = t.level * 100;
+      e.fill.style.height = pct + '%';
+      e.cap.style.bottom = pct + '%';
+      e.read.textContent = readout(t.level, max);
+      e.mute.classList.toggle('on', t.mute);
+      e.mute.textContent = t.mute ? 'MUTED' : (e.master ? 'MUTE ALL' : 'MUTE');
+      e.strip.classList.toggle('muted', t.mute);
+    }
+    updateHint();
+    const sync = S.sync[mixId];
+    const st = $('#state'), bn = $('#banner');
+    const stat = S.status;
+    let chip = ['live', 'ok'], banner = null;
+    if (sync === 'unknown') { chip = ['not synced', 'bad']; banner = ['bad', 'Mixer state unknown. Faders are held (mute still works). Ask the Mac to press Sync on /setup.']; }
+    else if (stat.fc2 === false) { chip = ['Control 2 closed', 'bad']; banner = ['bad', 'Focusrite Control 2 is not running on the Mac, so changes will not reach the mixer.']; }
+    else if (!stat.midi) { chip = ['MIDI down', 'bad']; banner = ['bad', 'MIDI helper is not responding on the Mac. It restarts automatically.']; }
+    else if (sync === 'assumed') chip = ['live · assumed', 'warn'];
+    st.textContent = chip[0]; st.className = 'chip ' + chip[1];
+    bn.className = banner ? banner[0] : ''; bn.textContent = banner ? banner[1] : '';
+  }
+
+  function apply(snap) {
+    S = snap;
+    if (!mixId || !S.config.mixes.some((m) => m.id === mixId)) { mixId = S.config.mixes[0].id; }
+    const sig = S.config.channels.map((c) => c.id + c.name).join('|') + mixId + S.config.mixes.map((m) => m.name).join();
+    if (sig !== builtFor) { build(); builtFor = sig; }
+    // Don't fight a finger that is mid-drag.
+    for (const id of dragging) { const t = target(id); const e = els.get(id); if (t && e) t.level = lastSent.get(id) ?? t.level; }
+    render();
+  }
+
+  // ---- mix chooser ---------------------------------------------------------------------------------------------
+  function choose() {
+    const c = $('#choose');
+    c.innerHTML = '<h1>Which mix is this phone?</h1>';
+    for (const m of S.config.mixes) {
+      const b = document.createElement('button');
+      b.textContent = m.name; b.style.borderColor = m.color; b.style.color = m.color;
+      b.onclick = () => { mixId = m.id; store.set('mix', m.id); history.replaceState(null, '', '#' + m.id); c.style.display = 'none'; builtFor = ''; apply(S); };
+      c.appendChild(b);
+    }
+    if (mixId) { const x = document.createElement('button'); x.className = 'cancel'; x.textContent = 'Cancel'; x.onclick = () => { c.style.display = 'none'; }; c.appendChild(x); }
+    c.style.display = 'flex';
+  }
+
+  // ---- connection (transport) ----------------------------------------------------------------------------------
+  // Same UI over two transports: LAN (SSE + fetch to the Mac) or relay (Supabase Realtime, works on any network).
+  const MODE = window.IEM_MODE || { type: 'lan' };
+
+  function lanTransport() {
+    let watchdog;
+    return {
+      throttleMs: 33,
+      start(onState, setOnline) {
+        const connect = () => {
+          const es = new EventSource('/events');
+          const kick = () => { clearTimeout(watchdog); watchdog = setTimeout(() => { es.close(); setOnline(false); connect(); }, 15000); };
+          es.addEventListener('state', (ev) => { setOnline(true); kick(); onState(JSON.parse(ev.data)); });
+          es.onerror = () => setOnline(false);
+          kick();
+        };
+        connect();
+      },
+      set: (p) => fetch('/api/set', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p), keepalive: true }).catch(() => {}),
+      wake(onState, setOnline) { fetch('/api/state').then((r) => r.json()).then((st) => { setOnline(true); onState(st); }).catch(() => {}); },
+    };
+  }
+
+  function relayTransport() {
+    const KEY = 'iem.token';
+    let token = store.get(KEY), ch = null, lastState = 0, helloTimer, cb = {};
+    const send = (payload) => ch && ch.send({ type: 'broadcast', event: 'cmd', payload }).catch(() => {});
+
+    function connect() {
+      const client = supabase.createClient(MODE.url, MODE.key, { auth: { persistSession: false, autoRefreshToken: false }, realtime: { params: { eventsPerSecond: 20 } } });
+      ch = client.channel('iem:' + token, { config: { broadcast: { self: false } } });
+      ch.on('broadcast', { event: 'state' }, ({ payload }) => { lastState = Date.now(); cb.setOnline(true); cb.onState(payload); });
+      ch.subscribe((s) => { if (s === 'SUBSCRIBED') send({ t: 'hello' }); });
+      // Bridge heartbeats every 2 s. Silence means the Mac (or its internet) is away, not that audio stopped.
+      clearInterval(helloTimer);
+      const started = Date.now();
+      helloTimer = setInterval(() => {
+        const silent = Date.now() - lastState > 6000;
+        if (silent) { cb.setOnline(false, Date.now() - started > 12000 && !lastState ? 'badlink' : 'bridge'); send({ t: 'hello' }); }
+      }, 2000);
+    }
+
+    async function login(pw) {
+      const r = await fetch('/api/iem/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+      if (r.status === 429) throw new Error('Too many tries. Wait a minute.');
+      if (!r.ok) throw new Error('Wrong password');
+      token = (await r.json()).token; store.set(KEY, token);
+    }
+
+    return {
+      throttleMs: 100,
+      start(onState, setOnline) {
+        cb = { onState, setOnline };
+        const form = $('#login');
+        const go = () => { form.style.display = 'none'; connect(); };
+        if (token) return go();
+        form.style.display = 'flex';
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          try { await login($('#pw').value); $('#pw').value = ''; go(); } catch (err) { $('#loginErr').textContent = err.message; }
+        };
+      },
+      set: (p) => send({ t: 'set', ...p }),
+      wake() { send({ t: 'hello' }); },
+      signOut() { store.set(KEY, ''); location.reload(); },
+    };
+  }
+
+  const transport = MODE.type === 'relay' ? relayTransport() : lanTransport();
+
+  function setOnline(v, reason = 'network') {
+    online = v;
+    $('#lock').style.display = v ? 'none' : 'flex';
+    const relay = MODE.type === 'relay';
+    $('#lockTitle').textContent = reason === 'badlink' ? "Can't find the bridge" : relay ? 'Waiting for the Mac…' : 'Reconnecting to the bridge…';
+    $('#lockSub').textContent = reason === 'badlink'
+      ? 'Either the Mac bridge is off, or the password/link has changed.'
+      : "Your mix is unaffected. Audio keeps running on the interface. Faders are locked until you're back.";
+    $('#relogin').style.display = reason === 'badlink' ? 'inline-block' : 'none';
+    if (!v) { $('#state').textContent = 'offline'; $('#state').className = 'chip bad'; }
+  }
+  $('#relogin').onclick = () => transport.signOut?.();
+
+  mixId = location.hash.slice(1) || store.get('mix');
+  if (location.hash.slice(1)) store.set('mix', mixId);
+  setOnline(false);
+  transport.start(apply, setOnline);
+  // Phones pause timers in the background; ask for fresh state the moment one wakes.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) transport.wake(apply, setOnline); });
+})();
+</script>
+</body>
+</html>
