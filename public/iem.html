@@ -196,7 +196,8 @@
     const st = $('#state'), bn = $('#banner');
     const stat = S.status;
     let chip = ['live', 'ok'], banner = null;
-    if (sync === 'unknown') { chip = ['not synced', 'bad']; banner = ['bad', 'Mixer state unknown. Faders are held (mute still works). Ask the Mac to press Sync on /setup.']; }
+    if (stat.interface === false) { chip = ['Scarlett off', 'bad']; banner = ['bad', 'The Scarlett is not connected to the Mac (check USB and power). Nothing you change will reach the mixer until it is back.']; }
+    else if (sync === 'unknown') { chip = ['not synced', 'bad']; banner = ['bad', 'Mixer state unknown. Faders are held (mute still works). Ask the Mac to press Sync on /setup.']; }
     else if (stat.fc2 === false) { chip = ['Control 2 closed', 'bad']; banner = ['bad', 'Focusrite Control 2 is not running on the Mac, so changes will not reach the mixer.']; }
     else if (!stat.midi) { chip = ['MIDI down', 'bad']; banner = ['bad', 'MIDI helper is not responding on the Mac. It restarts automatically.']; }
     else if (sync === 'assumed') chip = ['live · assumed', 'warn'];
