@@ -570,21 +570,69 @@ export default function LiveQueueList({
       </p>
 
       {view === "setlist" ? (
-        <SetlistPanel
-          ref={setlistRef}
-          databases={setlistDatabases}
-          defaultDatabaseId={songDatabaseId}
-          onChoose={(songName, artistName) => void openSongInForScore(songName, artistName)}
-          bangerKeys={bangerKeys}
-          songLinks={songLinks}
-          onNotice={showForScoreNotice}
-          // Choosing Banger mode also puts this venue's bangers in the live queue (operator
-          // only, behind every real request). Anything already queued is skipped.
-          onActivateBangers={() => {
-            void activateBangerMode(songDatabaseIdRef.current, currentVenueIdRef.current);
-            showForScoreNotice("Bangers added to the live queue (only you can see them)", true);
-          }}
-        />
+        // Setlist keeps a slim read-only copy of the queue beside it (wide
+        // screens only) so requests stay in sight; acting on them (played /
+        // delete) is still Queue-view only, so a stray key can't touch them.
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <SetlistPanel
+              ref={setlistRef}
+              databases={setlistDatabases}
+              defaultDatabaseId={songDatabaseId}
+              onChoose={(songName, artistName) => void openSongInForScore(songName, artistName)}
+              bangerKeys={bangerKeys}
+              songLinks={songLinks}
+              onNotice={showForScoreNotice}
+              // Choosing Banger mode also puts this venue's bangers in the live queue (operator
+              // only, behind every real request). Anything already queued is skipped.
+              onActivateBangers={() => {
+                void activateBangerMode(songDatabaseIdRef.current, currentVenueIdRef.current);
+                showForScoreNotice("Bangers added to the live queue (only you can see them)", true);
+              }}
+            />
+          </div>
+          <aside className="hidden md:flex w-72 shrink-0 sticky top-4 max-h-[calc(100vh-2rem)] flex-col gap-2 overflow-y-auto rounded-xl border border-border bg-surface p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Queue</p>
+              <p className="text-xs text-foreground-muted">{displayedQueue.length} waiting</p>
+            </div>
+            {displayedQueue.length === 0 ? (
+              <p className="py-4 text-center text-xs text-foreground-muted">Queue is empty.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {displayedQueue.map((item, index) => (
+                  <li
+                    key={item.id}
+                    className={`rounded-lg border px-3 py-2 ${
+                      index === Math.min(selectedIndex, displayedQueue.length - 1)
+                        ? "border-accent bg-accent/10"
+                        : "border-border bg-background"
+                    }`}
+                  >
+                    <p className="flex items-center gap-1 truncate text-sm font-semibold">
+                      {item.tipAmountCents > 0 && <span aria-hidden>💰</span>}
+                      <span className="truncate">{item.songName}</span>
+                    </p>
+                    <p className="truncate text-xs text-foreground-muted">{item.artistName}</p>
+                    <p className="truncate text-xs">
+                      {item.requesterName}
+                      {item.otherRequesterCount > 0 && ` +${item.otherRequesterCount}`}
+                      {item.tipAmountCents > 0 && (
+                        <span className="font-semibold text-tip"> · ${(item.tipAmountCents / 100).toFixed(2)}</span>
+                      )}
+                    </p>
+                    {item.shoutOutRequesterNames.length > 0 && (
+                      <p className="truncate text-xs font-medium text-tip">⭐ {item.shoutOutRequesterNames.join(", ")}</p>
+                    )}
+                    {item.linkedSongs.length > 0 && (
+                      <p className="truncate text-[11px] text-accent-hover">🔗 +{item.linkedSongs.length} linked</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </aside>
+        </div>
       ) : displayedQueue.length === 0 ? (
         <p className="text-foreground-muted text-center py-12">
           {bangerMode ? "No bangers in the queue right now." : "Queue is empty."}
