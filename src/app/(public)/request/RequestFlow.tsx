@@ -301,10 +301,8 @@ export default function RequestFlow({
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-6">
         {tipPaid ? (
-          <div className="flex flex-col gap-3 max-w-xs">
-            <h1 className="text-2xl font-semibold">Thank you!</h1>
-            {thankYou && <p className="text-lg">{thankYou}</p>}
-          </div>
+          // One message only: the tier message for this tip, or plain "Thank you!" when no tier applies.
+          <h1 className="text-2xl font-semibold max-w-xs">{thankYou ?? "Thank you!"}</h1>
         ) : (
           <h1 className="text-2xl font-semibold">Request received!</h1>
         )}
