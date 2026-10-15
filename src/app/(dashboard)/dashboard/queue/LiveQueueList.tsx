@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { AdminQueueItem } from "@/lib/queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { markPlayed, deleteRequest } from "@/actions/queue";
+import { markPlayed, deleteRequest, requeueRequests } from "@/actions/queue";
+import type { RecentlyPlayedItem } from "@/lib/queue";
 import { setCurrentVenue } from "@/actions/venues";
 import { bangerKey } from "@/lib/bangerKey";
 import { useMidiOutput } from "@/lib/useMidiOutput";
@@ -55,6 +56,13 @@ export default function LiveQueueList({
   forScoreLinks: Record<string, ForScoreLink>;
 }) {
   const [queue, setQueueState] = useState(initialQueue);
+  // The last few songs marked played (newest first), so one can be put back in the queue.
+  const [recentlyPlayed, setRecentlyPlayedState] = useState<RecentlyPlayedItem[]>([]);
+  const recentlyPlayedRef = useRef(recentlyPlayed);
+  function setRecentlyPlayed(next: RecentlyPlayedItem[]) {
+    recentlyPlayedRef.current = next;
+    setRecentlyPlayedState(next);
+  }
   const [bangerKeys, setBangerKeysState] = useState(new Set(initialBangerKeys));
   const [bangerMode] = useState(false); // the old queue-filter Banger Mode has no trigger now: bangers are a Setlist sub-list
   const [currentVenueId, setCurrentVenueIdState] = useState(initialVenueId);
@@ -186,6 +194,7 @@ export default function LiveQueueList({
           applyServerQueue(data.queue ?? []);
           setBangerKeys(new Set(data.bangerKeys ?? []));
           setCurrentVenueId(data.currentVenueId ?? null);
+          setRecentlyPlayed(data.recentlyPlayed ?? []);
         }
       } catch {
         // transient network error — next broadcast or fallback poll will retry
@@ -256,6 +265,23 @@ export default function LiveQueueList({
     } finally {
       pendingRemovals.current.delete(item.id);
       setPendingActionId(null);
+    }
+  }
+
+  // Put a played song back in the queue. The server broadcast refreshes both lists; the strip
+  // drops the entry at once so a double press can't requeue it twice.
+  async function handleRequeue(item: RecentlyPlayedItem) {
+    setRecentlyPlayed(recentlyPlayedRef.current.filter((r) => r.key !== item.key));
+    try {
+      await requeueRequests(item.requestIds, songDatabaseIdRef.current);
+    } finally {
+      void fetch("/api/dashboard/queue", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((data) => {
+          applyServerQueue(data.queue ?? []);
+          setRecentlyPlayed(data.recentlyPlayed ?? []);
+        })
+        .catch(() => {});
     }
   }
 
@@ -421,6 +447,14 @@ export default function LiveQueueList({
         return;
       }
 
+      // U puts the song just marked played back in the queue (undo).
+      if (key === "u") {
+        e.preventDefault();
+        const last = recentlyPlayedRef.current[0];
+        if (last) void handleRequeue(last);
+        return;
+      }
+
       const isForScore = e.key.toLowerCase() === "f";
       const isLinked = e.key.toLowerCase() === "l";
       if (!isForScore && !isLinked && e.code !== "Space" && e.key !== "Enter" && e.key !== "Delete" && e.key !== "Backspace") return;
@@ -531,7 +565,7 @@ export default function LiveQueueList({
 
       <p className="hidden sm:block text-xs text-foreground-muted -mt-2">
         {view === "queue"
-          ? "Arrows select · Space played · F forScore + Ableton · L next paired song · Delete remove · S setlist"
+          ? "Arrows select · Space played · U undo last played · F forScore + Ableton · L next paired song · Delete remove · S setlist"
           : "Arrows scroll (up past the top: Full set list / Banger mode) · F or Enter choose · L next paired song · Q back to requests"}
       </p>
 
@@ -677,6 +711,32 @@ export default function LiveQueueList({
             </li>
           ))}
         </ul>
+      )}
+
+      {view === "queue" && recentlyPlayed.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <p className="text-xs font-medium text-foreground-muted">Recently played · U puts the last one back</p>
+          <ul className="flex flex-col gap-1.5">
+            {recentlyPlayed.map((item) => (
+              <li
+                key={item.key}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
+              >
+                <span className="min-w-0 truncate text-sm">
+                  <span className="font-medium">{item.songName}</span>
+                  <span className="text-foreground-muted"> — {item.artistName}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleRequeue(item)}
+                  className="shrink-0 rounded-lg border border-accent px-3 py-1 text-xs font-bold text-accent hover:bg-accent/10"
+                >
+                  Put back
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

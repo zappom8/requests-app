@@ -219,3 +219,32 @@ export async function getAdminQueue(songDatabaseId: string): Promise<AdminQueueI
     linkedSongs: g.linkedSongs,
   }));
 }
+
+export type RecentlyPlayedItem = {
+  key: string;
+  requestIds: string[];
+  songName: string;
+  artistName: string;
+  playedAt: string;
+};
+
+// The last few songs marked played, newest first, so one can be put back in the queue. markPlayed
+// stamps every request for a song with one playedAt, and End gig stamps the whole queue with one,
+// so rows are grouped per song + playedAt.
+export async function getRecentlyPlayed(songDatabaseId: string, limit = 6): Promise<RecentlyPlayedItem[]> {
+  const rows = await prisma.request.findMany({
+    where: { songDatabaseId, status: "PLAYED", playedAt: { not: null } },
+    orderBy: { playedAt: "desc" },
+    take: 60,
+    select: { id: true, songName: true, artistName: true, playedAt: true },
+  });
+  const groups = new Map<string, RecentlyPlayedItem>();
+  for (const r of rows) {
+    const playedAt = r.playedAt!.toISOString();
+    const key = `${r.songName}::${r.artistName}::${playedAt}`;
+    const g = groups.get(key);
+    if (g) g.requestIds.push(r.id);
+    else groups.set(key, { key, requestIds: [r.id], songName: r.songName, artistName: r.artistName, playedAt });
+  }
+  return [...groups.values()].slice(0, limit);
+}

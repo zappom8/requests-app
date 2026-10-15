@@ -40,3 +40,18 @@ export async function deleteRequest(requestIds: string[], songDatabaseId: string
   revalidatePath("/queue");
   await broadcastQueueChanged(songDatabaseId);
 }
+
+// Puts played songs back in the queue (a mis-tap on PLAYED, or a song to repeat). Only touches
+// rows that are PLAYED, so it can't resurrect something deleted, and clears playedAt so the
+// history and statistics don't count a play that was taken back.
+export async function requeueRequests(requestIds: string[], songDatabaseId: string) {
+  const performer = await requirePerformer();
+  await assertOwnsDatabase(performer.id, songDatabaseId);
+  await prisma.request.updateMany({
+    where: { id: { in: requestIds }, songDatabaseId, status: "PLAYED" },
+    data: { status: "QUEUED", playedAt: null },
+  });
+
+  revalidatePath("/queue");
+  await broadcastQueueChanged(songDatabaseId);
+}

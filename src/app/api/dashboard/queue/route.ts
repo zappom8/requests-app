@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminQueue } from "@/lib/queue";
+import { getAdminQueue, getRecentlyPlayed } from "@/lib/queue";
 import { getActiveSongDatabaseId } from "@/lib/settings";
 import { syncCurrentVenue } from "@/lib/venueSchedule";
 import { getBangerKeys } from "@/lib/bangers";
@@ -18,8 +18,11 @@ export async function GET() {
   ]);
   const bangerKeys = await getBangerKeys(currentVenueId);
   if (!activeSongDatabaseId) {
-    return NextResponse.json({ queue: [], bangerKeys, currentVenueId });
+    return NextResponse.json({ queue: [], bangerKeys, currentVenueId, recentlyPlayed: [] });
   }
-  const queue = await getAdminQueue(activeSongDatabaseId);
-  return NextResponse.json({ queue, bangerKeys, currentVenueId });
+  const [queue, recentlyPlayed] = await Promise.all([
+    getAdminQueue(activeSongDatabaseId),
+    getRecentlyPlayed(activeSongDatabaseId),
+  ]);
+  return NextResponse.json({ queue, bangerKeys, currentVenueId, recentlyPlayed });
 }
