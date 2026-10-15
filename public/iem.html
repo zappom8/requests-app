@@ -257,17 +257,22 @@
     let token = store.get(KEY), ch = null, lastState = 0, helloTimer, cb = {};
     const send = (payload) => ch && ch.send({ type: 'broadcast', event: 'cmd', payload }).catch(() => {});
 
+    let client = null, started = 0, lastRebuild = 0;
     function connect() {
-      const client = supabase.createClient(MODE.url, MODE.key, { auth: { persistSession: false, autoRefreshToken: false }, realtime: { params: { eventsPerSecond: 20 } } });
+      try { clearInterval(helloTimer); client?.removeAllChannels(); client?.realtime?.disconnect(); } catch {}
+      lastRebuild = Date.now();
+      client = supabase.createClient(MODE.url, MODE.key, { auth: { persistSession: false, autoRefreshToken: false }, realtime: { params: { eventsPerSecond: 20 } } });
       ch = client.channel('iem:' + token, { config: { broadcast: { self: false } } });
       ch.on('broadcast', { event: 'state' }, ({ payload }) => { lastState = Date.now(); cb.setOnline(true); cb.onState(payload); });
       ch.subscribe((s) => { if (s === 'SUBSCRIBED') send({ t: 'hello' }); });
-      // Bridge heartbeats every 2 s. Silence means the Mac (or its internet) is away, not that audio stopped.
-      clearInterval(helloTimer);
-      const started = Date.now();
+      // The bridge heartbeats every 2 s. Silence just means the Mac is away or still starting: keep asking, and
+      // rebuild the whole connection every 15 s of silence in case it died without telling us. Never give up.
       helloTimer = setInterval(() => {
-        const silent = Date.now() - lastState > 6000;
-        if (silent) { cb.setOnline(false, Date.now() - started > 12000 && !lastState ? 'badlink' : 'bridge'); send({ t: 'hello' }); }
+        if (Date.now() - lastState > 6000) {
+          cb.setOnline(false, 'bridge');
+          send({ t: 'hello' });
+          if (Date.now() - lastRebuild > 15000) connect();
+        }
       }, 2000);
     }
 
@@ -292,7 +297,7 @@
         };
       },
       set: (p) => send({ t: 'set', ...p }),
-      wake() { send({ t: 'hello' }); },
+      wake() { if (Date.now() - lastState > 6000) connect(); else send({ t: 'hello' }); },
       signOut() { store.set(KEY, ''); location.reload(); },
     };
   }
@@ -303,11 +308,9 @@
     online = v;
     $('#lock').style.display = v ? 'none' : 'flex';
     const relay = MODE.type === 'relay';
-    $('#lockTitle').textContent = reason === 'badlink' ? "Can't find the bridge" : relay ? 'Waiting for the Mac…' : 'Reconnecting to the bridge…';
-    $('#lockSub').textContent = reason === 'badlink'
-      ? 'Either the Mac bridge is off, or the password/link has changed.'
-      : "Your mix is unaffected. Audio keeps running on the interface. Faders are locked until you're back.";
-    $('#relogin').style.display = reason === 'badlink' ? 'inline-block' : 'none';
+    $('#lockTitle').textContent = relay ? 'Waiting for the Mac and Scarlett…' : 'Reconnecting to the bridge…';
+    $('#lockSub').textContent = "This page connects by itself the moment they're up. Your mix is unaffected, and audio keeps running on the interface. Faders are locked until then.";
+    $('#relogin').style.display = 'none';
     if (!v) { $('#state').textContent = 'offline'; $('#state').className = 'chip bad'; }
   }
   $('#relogin').onclick = () => transport.signOut?.();
