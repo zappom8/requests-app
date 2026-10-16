@@ -141,8 +141,24 @@ export default function LiveQueueList({
     queueRef.current = next;
     setQueueState(next);
   }
+  // A fresh server snapshot (e.g. a new request arriving, possibly sorted
+  // above the current card) must not move the selection: it's tracked by the
+  // selected card's request ids, not by its position in the list. If that card
+  // is gone (played/deleted elsewhere) the position is kept, as before.
   function applyServerQueue(next: SerializedItem[]) {
-    setQueue(next.filter((item) => !pendingRemovals.current.has(item.id)));
+    const mode = bangerModeRef.current;
+    const keys = bangerKeysRef.current;
+    const before = computeDisplayedQueue(queueRef.current, mode, keys);
+    const selected = before[Math.min(selectedIndexRef.current, before.length - 1)];
+
+    const filtered = next.filter((item) => !pendingRemovals.current.has(item.id));
+    setQueue(filtered);
+
+    if (selected) {
+      const after = computeDisplayedQueue(filtered, mode, keys);
+      const index = after.findIndex((i) => i.requestIds.some((id) => selected.requestIds.includes(id)));
+      if (index !== -1) setSelectedIndex(index);
+    }
   }
   function setBangerKeys(next: Set<string>) {
     bangerKeysRef.current = next;
