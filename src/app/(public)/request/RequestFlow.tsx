@@ -514,13 +514,20 @@ export default function RequestFlow({
 
       {/* Sticky so the search box and Songs/Artists/Decades tabs stay reachable while scrolling a long list. */}
       <div className="sticky top-0 z-10 -mx-4 -my-2 flex flex-col gap-4 bg-background px-4 py-2">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          placeholder="Search songs or artists…"
-          className="w-full rounded-lg border border-border bg-surface px-3 py-3 text-base outline-none focus:border-accent"
-        />
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search songs or artists…"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-3 text-base outline-none focus:border-accent"
+          />
+          {/* The page header scrolls away on a long list, so the queue link
+              also lives in this pinned row. */}
+          <Link href="/queue" className="shrink-0 text-sm font-medium text-accent hover:text-accent-hover">
+            Queue
+          </Link>
+        </div>
 
         {!searchQuery.trim() && (
         <div className="flex gap-2">
