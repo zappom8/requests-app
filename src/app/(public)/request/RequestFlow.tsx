@@ -473,9 +473,6 @@ export default function RequestFlow({
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Request a Song</h1>
         <PromoLinks showBooking={false} />
-        <Link href="/queue" className="text-sm text-accent hover:text-accent-hover shrink-0">
-          View Queue
-        </Link>
       </div>
 
       {recentlyPlayedPrompt && (
