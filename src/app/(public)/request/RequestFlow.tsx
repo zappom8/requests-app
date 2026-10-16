@@ -28,6 +28,24 @@ function readSavedName(): { name: string; firstAt: number } | null {
   return null;
 }
 
+// A random id kept on this device only (never tied to a person). The server
+// uses it to refuse the same device requesting the same song repeatedly.
+const DEVICE_ID_KEY = "requestDeviceId";
+let memoryDeviceId: string | null = null;
+function getDeviceId(): string {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    memoryDeviceId ??= crypto.randomUUID();
+    return memoryDeviceId;
+  }
+}
+
 function saveName(name: string) {
   try {
     const firstAt = readSavedName()?.firstAt ?? Date.now();
@@ -251,6 +269,7 @@ export default function RequestFlow({
           decade: selectedSong.decade,
           requesterName,
           wantsShoutOut: giveShoutOut,
+          deviceId: getDeviceId(),
         });
         if (!result.success) {
           setError(result.error);
@@ -280,6 +299,7 @@ export default function RequestFlow({
         decade: selectedSong.decade,
         requesterName,
         wantsShoutOut: giveShoutOut,
+        deviceId: getDeviceId(),
         tipAmountCents,
       });
       if (!result.success) {

@@ -325,6 +325,9 @@ model Request {
   // calendar, or chosen by hand) — what the stats venue filter reads.
   venueId String?
   venue   Venue?  @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  // Random id stored on the requester's own device (never identifies them) —
+  // used to stop the same device requesting the same song repeatedly.
+  deviceId String?
 
   tipAmountCents        Int           @default(0)
   // Legacy Stripe-era payments — historical/audit only, no code path writes
@@ -344,6 +347,7 @@ model Request {
   @@index([status, songDatabaseId, requestedAt])
   @@index([triggeredByRequestId])
   @@index([venueId, requestedAt])
+  @@index([deviceId, songId, requestedAt])
 }
 
 model SearchLog {

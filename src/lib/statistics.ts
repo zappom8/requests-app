@@ -55,6 +55,27 @@ function realRequestsOnly(performerId: string, venueId?: string) {
   return Prisma.sql`${venue} AND "songDatabaseId" IN (SELECT "id" FROM "SongDatabase" WHERE "performerId" = ${performerId}) AND "isPairedAddition" = false AND "isBangerAddition" = false AND "requesterName" NOT ILIKE '%test%' AND COALESCE("billingName", '') NOT ILIKE '%test%' AND "requesterName" NOT ILIKE '%zappo%'`;
 }
 
+// A repeat: an earlier request for the same song, from the same person, in the
+// previous 4 hours. "Same person" is the same device when both rows have a
+// device id, otherwise (older requests) the same name. Such repeats are not
+// extra demand, so they don't count towards request counts — tip money
+// still counts, it's real. Qualified against the outer "Request" table, so
+// queries using this must not alias it.
+const repeatRequest = Prisma.sql`EXISTS (
+  SELECT 1 FROM "Request" prev
+  WHERE prev."id" <> "Request"."id"
+    AND "Request"."songId" IS NOT NULL
+    AND prev."songId" = "Request"."songId"
+    AND prev."requestedAt" < "Request"."requestedAt"
+    AND "Request"."requestedAt" - prev."requestedAt" < INTERVAL '4 hours'
+    AND prev."isPairedAddition" = false AND prev."isBangerAddition" = false
+    AND (
+      (prev."deviceId" IS NOT NULL AND "Request"."deviceId" IS NOT NULL AND prev."deviceId" = "Request"."deviceId")
+      OR ((prev."deviceId" IS NULL OR "Request"."deviceId" IS NULL)
+          AND LOWER(TRIM(prev."requesterName")) = LOWER(TRIM("Request"."requesterName")))
+    )
+)`;
+
 export type Overview = {
   totalRequests: number;
   totalTipCents: number;
@@ -67,7 +88,7 @@ export async function getOverview({ from, to, daysOfWeek, performerId, venueId }
     { totalRequests: bigint; totalTipCents: bigint | null; tippedRequestCount: bigint }[]
   >(Prisma.sql`
     SELECT
-      COUNT(*) AS "totalRequests",
+      COUNT(*) FILTER (WHERE NOT ${repeatRequest}) AS "totalRequests",
       SUM(CASE WHEN "tipAmountCents" > 0 THEN "tipAmountCents" ELSE 0 END) AS "totalTipCents",
       COUNT(*) FILTER (WHERE "tipAmountCents" > 0) AS "tippedRequestCount"
     FROM "Request"
@@ -93,7 +114,7 @@ export async function getMostRequestedSongs({ from, to, daysOfWeek, performerId,
   const rows = await prisma.$queryRaw<{ songName: string; artistName: string; value: bigint }[]>(Prisma.sql`
     SELECT "songName", "artistName", COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)} AND NOT ${repeatRequest}
     GROUP BY "songName", "artistName"
     ORDER BY value DESC
     LIMIT ${limit}
@@ -141,7 +162,7 @@ export async function getMostRequestedArtists(
   const rows = await prisma.$queryRaw<{ label: string; value: bigint }[]>(Prisma.sql`
     SELECT "artistName" AS label, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)} AND NOT ${repeatRequest}
     GROUP BY "artistName"
     ORDER BY value DESC
     LIMIT ${limit}
@@ -153,7 +174,7 @@ export async function getMostRequestedDecades({ from, to, daysOfWeek, performerI
   const rows = await prisma.$queryRaw<{ label: string; value: bigint }[]>(Prisma.sql`
     SELECT COALESCE("decade", 'Unknown') AS label, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)} AND NOT ${repeatRequest}
     GROUP BY label
     ORDER BY value DESC
   `);
@@ -163,9 +184,9 @@ export async function getMostRequestedDecades({ from, to, daysOfWeek, performerI
 export async function getMostRequestedDatabases({ from, to, daysOfWeek, performerId, venueId }: StatsScope): Promise<RankedLabel[]> {
   const rows = await prisma.$queryRaw<{ label: string; value: bigint }[]>(Prisma.sql`
     SELECT sd.name AS label, COUNT(*) AS value
-    FROM "Request" r
-    JOIN "SongDatabase" sd ON sd.id = r."songDatabaseId"
-    WHERE r."requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)}
+    FROM "Request"
+    JOIN "SongDatabase" sd ON sd.id = "Request"."songDatabaseId"
+    WHERE "Request"."requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)} AND NOT ${repeatRequest}
     GROUP BY sd.name
     ORDER BY value DESC
   `);
@@ -176,7 +197,7 @@ export type MonthlyPoint = { month: string; requests: number; tipCents: number }
 
 export async function getMonthly({ from, to, daysOfWeek, performerId, venueId }: StatsScope): Promise<MonthlyPoint[]> {
   const rows = await prisma.$queryRaw<{ month: Date; requests: bigint; tipcents: bigint }[]>(Prisma.sql`
-    SELECT date_trunc('month', ${localRequestedAt}) AS month, COUNT(*) AS requests, SUM("tipAmountCents") AS tipcents
+    SELECT date_trunc('month', ${localRequestedAt}) AS month, COUNT(*) FILTER (WHERE NOT ${repeatRequest}) AS requests, SUM("tipAmountCents") AS tipcents
     FROM "Request"
     WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)}
     GROUP BY month
@@ -195,7 +216,7 @@ export async function getRequestsByDayOfWeek({ from, to, daysOfWeek, performerId
   const rows = await prisma.$queryRaw<{ dow: number; value: bigint }[]>(Prisma.sql`
     SELECT EXTRACT(DOW FROM ${localRequestedAt})::int AS dow, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)} AND NOT ${repeatRequest}
     GROUP BY dow
     ORDER BY value DESC
   `);
@@ -206,7 +227,7 @@ export async function getRequestsByHour({ from, to, daysOfWeek, performerId, ven
   const rows = await prisma.$queryRaw<{ hour: number; value: bigint }[]>(Prisma.sql`
     SELECT EXTRACT(HOUR FROM ${localRequestedAt})::int AS hour, COUNT(*) AS value
     FROM "Request"
-    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)}
+    WHERE "requestedAt" BETWEEN ${from} AND ${to} ${dowFilter(daysOfWeek)} ${realRequestsOnly(performerId, venueId)} AND NOT ${repeatRequest}
     GROUP BY hour
     ORDER BY value DESC
   `);
