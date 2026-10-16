@@ -258,8 +258,18 @@ export default function LiveQueueList({
     if (index !== -1) setSelectedIndex(index);
   }
 
+  // When a card is removed (played / deleted), the selection moves to the
+  // card just ahead of it — the next-higher-priority neighbour — so it keeps
+  // working towards the front instead of falling back behind. A removed front
+  // card leaves the selection on the new front.
+  function selectNeighbourBeforeRemoving(item: SerializedItem) {
+    const list = computeDisplayedQueue(queueRef.current, bangerModeRef.current, bangerKeysRef.current);
+    const index = list.findIndex((i) => i.id === item.id);
+    if (index !== -1) setSelectedIndex(Math.max(0, index - 1));
+  }
+
   async function handlePlayed(item: SerializedItem) {
-    syncSelectionToItem(item);
+    selectNeighbourBeforeRemoving(item);
     pendingRemovals.current.add(item.id);
     setPendingActionId(item.id);
     setQueue(queueRef.current.filter((i) => i.id !== item.id)); // optimistic
@@ -272,7 +282,7 @@ export default function LiveQueueList({
   }
 
   async function handleDelete(item: SerializedItem) {
-    syncSelectionToItem(item);
+    selectNeighbourBeforeRemoving(item);
     pendingRemovals.current.add(item.id);
     setPendingActionId(item.id);
     setQueue(queueRef.current.filter((i) => i.id !== item.id)); // optimistic
