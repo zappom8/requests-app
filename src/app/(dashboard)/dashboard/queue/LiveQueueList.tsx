@@ -715,13 +715,12 @@ export default function LiveQueueList({
                       <p className="text-foreground-muted truncate">{item.artistName}</p>
                     </div>
                   </div>
-                  {/* suppressHydrationWarning: locale/timezone-formatted time will
-                      legitimately differ between server render and the browser
-                      (e.g. server in one timezone, phone in another) — expected,
-                      not a bug. */}
+                  {/* Always Brisbane time, so the server render and the browser agree
+                      (suppressHydrationWarning keeps the SERVER's text on a
+                      mismatch, which is how this once showed UTC). */}
                   <div className="flex items-start gap-1 shrink-0">
                     <p className="text-xs text-foreground-muted whitespace-nowrap" suppressHydrationWarning>
-                      {new Date(item.requestedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      {new Date(item.requestedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" })}
                     </p>
                     {/* Phone only — there's no Delete key there. Kept tiny on
                         purpose; the laptop deletes with the keyboard. */}
