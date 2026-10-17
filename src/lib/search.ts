@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
+import { notCancelledSql } from "@/lib/cancelledArtists";
 
 export type SongResult = {
   id: string;
@@ -16,7 +17,8 @@ export type SongResult = {
 export async function searchSongs(
   songDatabaseId: string,
   query: string,
-  limit = 30
+  limit = 30,
+  cancelledArtists: string[] = []
 ): Promise<SongResult[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
@@ -26,6 +28,7 @@ export async function searchSongs(
       GREATEST(similarity(name, ${trimmed}), similarity(artist, ${trimmed})) AS score
     FROM "Song"
     WHERE "songDatabaseId" = ${songDatabaseId}
+      ${notCancelledSql(cancelledArtists)}
       AND (
         name ILIKE ${"%" + trimmed + "%"}
         OR artist ILIKE ${"%" + trimmed + "%"}

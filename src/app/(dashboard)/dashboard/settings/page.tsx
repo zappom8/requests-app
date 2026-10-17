@@ -5,6 +5,8 @@ import ImageUploadForm from "./ImageUploadForm";
 import ForScoreReceiverSettings from "./ForScoreReceiverSettings";
 import AbletonReceiverSettings from "./AbletonReceiverSettings";
 import TipThanksEditor from "./TipThanksEditor";
+import CancelledArtistsEditor from "./CancelledArtistsEditor";
+import { prisma } from "@/lib/prisma";
 import { parseTipThanksTiers } from "@/lib/tipThanks";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,17 @@ export default async function SettingsPage() {
   const performer = await getCurrentPerformer();
   const settings = await getSettings(performer.id);
 
+  const cancelledArtists = settings?.cancelledArtists ?? [];
+  const cancelledCounts: Record<string, number> = {};
+  for (const name of cancelledArtists) {
+    cancelledCounts[name] = await prisma.song.count({
+      where: {
+        songDatabase: { performerId: performer.id },
+        artist: { contains: name, mode: "insensitive" },
+      },
+    });
+  }
+
   const defaultTipAmounts = (settings?.defaultTipAmountsCents ?? [500, 1000, 2000])
     .map((c) => (c / 100).toString())
     .join(", ");
@@ -48,6 +61,8 @@ export default async function SettingsPage() {
           <ImageUploadForm field="logoUrl" label="Logo" currentUrl={settings?.logoUrl ?? null} />
         </div>
       </div>
+
+      <CancelledArtistsEditor initial={cancelledArtists} counts={cancelledCounts} />
 
       <ForScoreReceiverSettings />
       <AbletonReceiverSettings />

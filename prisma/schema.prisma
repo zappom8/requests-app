@@ -404,6 +404,8 @@ model Settings {
   brandPrimaryColor           String?
   brandSecondaryColor         String?
   disableRecentlyPlayedPrompt Boolean   @default(false)
+  // Artists hidden from requests and bangers for now — see src/lib/cancelledArtists.ts.
+  cancelledArtists            String[]  @default([])
   // [{ minCents, message }] — see src/lib/tipThanks.ts. NULL = built-in defaults.
   tipThankYouTiers            Json?
   // Public "share this calendar" links (webcal:// → https://) from iCloud

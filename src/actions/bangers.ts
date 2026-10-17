@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { broadcastQueueChanged } from "@/lib/supabase/server";
+import { getCancelledArtists, isCancelledArtist } from "@/lib/cancelledArtists";
 import { assertOwnsDatabase, assertOwnsVenue, requirePerformer } from "@/lib/auth";
 
 export type SongRef = { songName: string; artistName: string };
@@ -48,13 +49,17 @@ export async function activateBangerMode(songDatabaseId: string, venueId: string
     prisma.request.findMany({ where: { songDatabaseId, status: "QUEUED" }, select: { songId: true } }),
   ]);
   if (bangers.length === 0) return;
+  const cancelled = await getCancelledArtists(performer.id);
 
   const catalogByKey = new Map(catalogSongs.map((s) => [`${s.name}::${s.artist}`, s]));
   const queuedSongIds = new Set(queuedRequests.map((r) => r.songId).filter((id): id is string => id !== null));
 
   const eligible = bangers
     .map((b) => catalogByKey.get(`${b.songName}::${b.artistName}`))
-    .filter((song): song is (typeof catalogSongs)[number] => !!song && !queuedSongIds.has(song.id));
+    .filter(
+      (song): song is (typeof catalogSongs)[number] =>
+        !!song && !queuedSongIds.has(song.id) && !isCancelledArtist(song.artist, cancelled)
+    );
   if (eligible.length === 0) return;
 
   const eligibleKeys = new Set(eligible.map((s) => `${s.name}::${s.artist}`));

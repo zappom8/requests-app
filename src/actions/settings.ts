@@ -44,6 +44,30 @@ function optionalString(formData: FormData, key: string): string | null {
   return value || null;
 }
 
+// "Cancelled artists" — hidden from requests and bangers (songs stay in the
+// database). Saved on its own, not with the big Settings form.
+export async function setCancelledArtists(formData: FormData) {
+  const performer = await requirePerformer();
+  const seen = new Set<string>();
+  const cancelledArtists: string[] = [];
+  for (const raw of formData.getAll("cancelledArtist")) {
+    const name = String(raw).trim().slice(0, 100);
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      cancelledArtists.push(name);
+    }
+  }
+  await prisma.settings.upsert({
+    where: { performerId: performer.id },
+    update: { cancelledArtists },
+    create: { performerId: performer.id, cancelledArtists },
+  });
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/bangers");
+  revalidatePath("/dashboard/queue");
+  revalidatePath("/request");
+}
+
 export async function updateSettings(formData: FormData) {
   const performer = await requirePerformer();
   const bio = optionalString(formData, "bio");

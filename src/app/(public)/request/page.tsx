@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveSongDatabaseId } from "@/lib/settings";
 import { getDefaultPerformer } from "@/lib/auth";
 import RequestFlow from "./RequestFlow";
+import { getCancelledArtists, notCancelledSongFilter } from "@/lib/cancelledArtists";
 import { parseTipThanksTiers } from "@/lib/tipThanks";
 
 // Must always reflect the current active database and its current songs —
@@ -23,10 +24,11 @@ export default async function RequestPage() {
   }
 
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const cancelledArtists = await getCancelledArtists(performer.id);
 
   const [songs, settings, recentlyPlayedRequests] = await Promise.all([
     prisma.song.findMany({
-      where: { songDatabaseId: activeSongDatabaseId },
+      where: { songDatabaseId: activeSongDatabaseId, ...notCancelledSongFilter(cancelledArtists) },
       orderBy: { name: "asc" },
       select: { id: true, name: true, artist: true, decade: true },
     }),
