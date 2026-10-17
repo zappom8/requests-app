@@ -66,7 +66,7 @@
   <div id="hint">Swipe the channel strips sideways for more →</div>
   <div id="strips"></div>
 </div>
-<div id="lock"><div><span id="lockTitle">Reconnecting to the bridge…</span><small id="lockSub">Your mix is unaffected. Audio keeps running on the interface. Faders are locked until you're back.</small><button id="relogin" style="display:none">Sign in again</button></div></div>
+<div id="lock"><div><span id="lockTitle">Reconnecting to the bridge…</span><small id="lockSub">Your mix is unaffected. Audio keeps running on the interface. Faders are locked until you're back.</small><button id="relogin" style="display:none">Not connecting? Sign in again</button></div></div>
 <form id="login"><h1>South Pine IEM</h1><input id="pw" type="password" placeholder="Password" autocomplete="current-password" autocapitalize="none" autocorrect="off"><button>Enter</button><div id="loginErr"></div></form>
 <div id="choose"></div>
 
@@ -257,7 +257,8 @@
     let token = store.get(KEY), ch = null, lastState = 0, helloTimer, cb = {};
     const send = (payload) => ch && ch.send({ type: 'broadcast', event: 'cmd', payload }).catch(() => {});
 
-    let client = null, started = 0, lastRebuild = 0;
+    let client = null, lastRebuild = 0;
+    const pageStart = Date.now();
     function connect() {
       try { clearInterval(helloTimer); client?.removeAllChannels(); client?.realtime?.disconnect(); } catch {}
       lastRebuild = Date.now();
@@ -269,7 +270,7 @@
       // rebuild the whole connection every 15 s of silence in case it died without telling us. Never give up.
       helloTimer = setInterval(() => {
         if (Date.now() - lastState > 6000) {
-          cb.setOnline(false, 'bridge');
+          cb.setOnline(false, !lastState && Date.now() - pageStart > 20000 ? 'stuck' : 'bridge');
           send({ t: 'hello' });
           if (Date.now() - lastRebuild > 15000) connect();
         }
@@ -297,7 +298,7 @@
         };
       },
       set: (p) => send({ t: 'set', ...p }),
-      wake() { if (Date.now() - lastState > 6000) connect(); else send({ t: 'hello' }); },
+      wake() { if (Date.now() - lastState > 6000 && Date.now() - lastRebuild > 8000) connect(); else send({ t: 'hello' }); },
       signOut() { store.set(KEY, ''); location.reload(); },
     };
   }
@@ -310,7 +311,7 @@
     const relay = MODE.type === 'relay';
     $('#lockTitle').textContent = relay ? 'Waiting for the Mac and Scarlett…' : 'Reconnecting to the bridge…';
     $('#lockSub').textContent = "This page connects by itself the moment they're up. Your mix is unaffected, and audio keeps running on the interface. Faders are locked until then.";
-    $('#relogin').style.display = 'none';
+    $('#relogin').style.display = reason === 'stuck' ? 'inline-block' : 'none';
     if (!v) { $('#state').textContent = 'offline'; $('#state').className = 'chip bad'; }
   }
   $('#relogin').onclick = () => transport.signOut?.();
