@@ -46,7 +46,7 @@ function optionalString(formData: FormData, key: string): string | null {
 
 // "Cancelled artists" — hidden from requests and bangers (songs stay in the
 // database). Saved on its own, not with the big Settings form.
-export async function setCancelledArtists(formData: FormData) {
+export async function setCancelledArtists(formData: FormData): Promise<{ counts: Record<string, number> }> {
   const performer = await requirePerformer();
   const seen = new Set<string>();
   const cancelledArtists: string[] = [];
@@ -62,10 +62,18 @@ export async function setCancelledArtists(formData: FormData) {
     update: { cancelledArtists },
     create: { performerId: performer.id, cancelledArtists },
   });
+  // How many songs each saved name now hides, so the page can confirm it.
+  const counts: Record<string, number> = {};
+  for (const name of cancelledArtists) {
+    counts[name.toLowerCase()] = await prisma.song.count({
+      where: { songDatabase: { performerId: performer.id }, artist: { contains: name, mode: "insensitive" } },
+    });
+  }
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/bangers");
   revalidatePath("/dashboard/queue");
   revalidatePath("/request");
+  return { counts };
 }
 
 export async function updateSettings(formData: FormData) {

@@ -35,7 +35,7 @@ export default async function SettingsPage() {
   const cancelledArtists = settings?.cancelledArtists ?? [];
   const cancelledCounts: Record<string, number> = {};
   for (const name of cancelledArtists) {
-    cancelledCounts[name] = await prisma.song.count({
+    cancelledCounts[name.toLowerCase()] = await prisma.song.count({
       where: {
         songDatabase: { performerId: performer.id },
         artist: { contains: name, mode: "insensitive" },

@@ -1,22 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { setCancelledArtists } from "@/actions/settings";
 
-// The list of cancelled artists, saved with its own button. `counts` is how many
-// songs each saved name currently hides (from the last save).
+// The list of cancelled artists, saved with its own button. `counts` (keyed by
+// lowercase name) is how many songs each saved name currently hides.
 export default function CancelledArtistsEditor({
   initial,
-  counts,
+  counts: initialCounts,
 }: {
   initial: string[];
   counts: Record<string, number>;
 }) {
   const [rows, setRows] = useState(initial.map((name, i) => ({ key: i, name })));
   const [nextKey, setNextKey] = useState(initial.length);
+  const [counts, setCounts] = useState(initialCounts);
+  const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [pending, startTransition] = useTransition();
+
+  function update(key: number, name: string) {
+    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, name } : r)));
+    setStatus("idle");
+  }
+
+  function save(formData: FormData) {
+    startTransition(async () => {
+      try {
+        const result = await setCancelledArtists(formData);
+        setCounts(result.counts);
+        setStatus("saved");
+      } catch {
+        setStatus("error");
+      }
+    });
+  }
+
+  const hiddenTotal = Object.values(counts).reduce((a, b) => a + b, 0);
 
   return (
-    <form action={setCancelledArtists} className="rounded-lg border border-border bg-surface p-4 space-y-3">
+    <form action={save} className="rounded-lg border border-border bg-surface p-4 space-y-3">
       <div>
         <h2 className="text-sm font-medium">Cancelled artists</h2>
         <p className="text-xs text-foreground-muted">
@@ -26,33 +48,41 @@ export default function CancelledArtistsEditor({
         </p>
       </div>
       {rows.length === 0 && <p className="text-xs text-foreground-muted">No cancelled artists.</p>}
-      {rows.map((r) => (
-        <div key={r.key} className="flex items-center gap-2">
-          <input
-            type="text"
-            name="cancelledArtist"
-            defaultValue={r.name}
-            placeholder="Artist name"
-            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          {r.name && counts[r.name] !== undefined && (
-            <span className="text-xs text-foreground-muted whitespace-nowrap">{counts[r.name]} songs hidden</span>
-          )}
-          <button
-            type="button"
-            onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
-            className="text-xs font-medium text-danger hover:underline"
-          >
-            Remove
-          </button>
-        </div>
-      ))}
-      <div className="flex items-center gap-2">
+      {rows.map((r) => {
+        const count = counts[r.name.trim().toLowerCase()];
+        return (
+          <div key={r.key} className="flex items-center gap-2">
+            <input
+              type="text"
+              name="cancelledArtist"
+              value={r.name}
+              onChange={(e) => update(r.key, e.target.value)}
+              placeholder="Artist name"
+              className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+            {count !== undefined && r.name.trim() && (
+              <span className="text-xs text-foreground-muted whitespace-nowrap">{count} songs hidden</span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setRows((rs) => rs.filter((x) => x.key !== r.key));
+                setStatus("idle");
+              }}
+              className="text-xs font-medium text-danger hover:underline"
+            >
+              Remove
+            </button>
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => {
             setRows((rs) => [...rs, { key: nextKey, name: "" }]);
             setNextKey((k) => k + 1);
+            setStatus("idle");
           }}
           className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:border-accent"
         >
@@ -60,10 +90,17 @@ export default function CancelledArtistsEditor({
         </button>
         <button
           type="submit"
-          className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+          disabled={pending}
+          className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
         >
-          Save cancelled artists
+          {pending ? "Saving…" : "Save cancelled artists"}
         </button>
+        {status === "saved" && (
+          <span className="text-sm font-medium text-success">
+            Saved ✓ — {hiddenTotal} song{hiddenTotal === 1 ? "" : "s"} hidden
+          </span>
+        )}
+        {status === "error" && <span className="text-sm font-medium text-danger">Couldn&apos;t save — try again</span>}
       </div>
     </form>
   );
