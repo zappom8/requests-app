@@ -18,8 +18,9 @@
     font: 15px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   #app { display: flex; flex-direction: column; height: 100%; padding: env(safe-area-inset-top) 10px calc(env(safe-area-inset-bottom) + 8px); }
   header { display: flex; align-items: center; gap: 10px; padding: 10px 2px; }
-  #tabs { display: flex; gap: 6px; flex: 1; min-width: 0; }
-  #tabs button { flex: 1; min-width: 0; padding: 9px 4px; border-radius: 10px; border: 1px solid var(--edge); background: var(--panel); color: var(--dim); font: inherit; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+  #tabs { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+  .trow { display: flex; gap: 6px; }
+  #tabs button { flex: 1; min-width: 0; padding: 8px 4px; font-size: 13px; border-radius: 10px; border: 1px solid var(--edge); background: var(--panel); color: var(--dim); font: inherit; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
   #tabs button.on { color: #111; }
   .chip { font-size: 12px; padding: 5px 9px; border-radius: 99px; background: var(--panel); border: 1px solid var(--edge); color: var(--dim); }
   .chip.ok { color: var(--ok); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--mute); }
@@ -106,32 +107,41 @@
   // ---- sending ---------------------------------------------------------------------------------------
   const pending = new Map(); // key -> timer
   const lastSent = new Map();
+  const allMixes = () => [...S.config.mixes, ...(S.config.ablMixes || [])];
+  const isAbl = () => String(mixId).startsWith('abl_');
+  const sendSet = (p) => (isAbl() ? transport.abl(p) : transport.set(p));
   function setLevel(ch, level) {
     const key = ch;
     lastSent.set(key, level);
     if (pending.has(key)) return;
     pending.set(key, setTimeout(() => {
       pending.delete(key);
-      transport.set({ mix: mixId, ch, level: lastSent.get(key) });
+      sendSet({ mix: mixId, ch, level: lastSent.get(key) });
     }, transport.throttleMs));
   }
 
   // ---- ui build ------------------------------------------------------------------------------------------
   function build() {
-    const mix = S.config.mixes.find((m) => m.id === mixId);
+    const mix = allMixes().find((m) => m.id === mixId);
     $('#tabs').innerHTML = '';
-    for (const m of S.config.mixes) {
-      const b = document.createElement('button'); b.textContent = m.name;
-      const on = m.id === mixId;
-      b.className = on ? 'on' : ''; if (on) { b.style.background = m.color; b.style.borderColor = m.color; }
-      b.onclick = () => { if (m.id === mixId) return; mixId = m.id; store.set('mix', m.id); history.replaceState(null, '', '#' + m.id); builtFor = ''; apply(S); };
-      $('#tabs').appendChild(b);
+    for (const group of [S.config.mixes, S.config.ablMixes || []]) {
+      if (!group.length) continue;
+      const row = document.createElement('div'); row.className = 'trow';
+      for (const m of group) {
+        const b = document.createElement('button'); b.textContent = m.name;
+        const on = m.id === mixId;
+        b.className = on ? 'on' : ''; if (on) { b.style.background = m.color; b.style.borderColor = m.color; }
+        b.onclick = () => { if (m.id === mixId) return; mixId = m.id; store.set('mix', m.id); history.replaceState(null, '', '#' + m.id); builtFor = ''; apply(S); };
+        row.appendChild(b);
+      }
+      $('#tabs').appendChild(row);
     }
     document.documentElement.style.setProperty('--accent', mix.color);
     const root = $('#strips');
     root.innerHTML = '';
     els.clear();
-    const items = [...S.config.channels.map((c) => ({ id: c.id, name: c.name })), { id: 'master', name: 'MASTER', master: true }];
+    const trackList = isAbl() ? (S.ableton?.tracks || []).map((n) => ({ id: n, name: n })) : S.config.channels.map((c) => ({ id: c.id, name: c.name }));
+    const items = [...trackList, { id: 'master', name: 'MASTER', master: true }];
     for (const it of items) {
       const strip = document.createElement('div');
       strip.className = 'strip' + (it.master ? ' master' : '');
@@ -141,22 +151,23 @@
       const e = { strip, fader, fill: strip.querySelector('.fill'), cap: strip.querySelector('.cap'), read: strip.querySelector('.read'), mute: strip.querySelector('.mute'), master: !!it.master };
       els.set(it.id, e);
       e.mute.addEventListener('click', () => {
-        if (!online) return;
-        const t = target(it.id); t.mute = !t.mute; render();
-        transport.set({ mix: mixId, ch: it.id, mute: t.mute });
+        const t = target(it.id); if (!online || !t) return; t.mute = !t.mute; render();
+        sendSet({ mix: mixId, ch: it.id, mute: t.mute });
       });
       attachDrag(it.id, fader);
       root.appendChild(strip);
     }
   }
 
-  const target = (id) => (id === 'master' ? S.mixes[mixId].master : S.mixes[mixId].ch[id]);
+  const mixState = () => (isAbl() ? S.ableton?.mixes?.[mixId] : S.mixes[mixId]);
+  const target = (id) => { const m = mixState(); return m ? (id === 'master' ? m.master : m.ch[id]) : undefined; };
 
   // Relative drag: the fader moves by how far your finger moves, never jumps to where you touch.
   function attachDrag(id, fader) {
     let startY = 0, startPos = 0, pid = null;
     fader.addEventListener('pointerdown', (ev) => {
       if (!online || pid !== null) return;
+      if (!target(id)) return;
       pid = ev.pointerId; fader.setPointerCapture(pid);
       startY = ev.clientY; startPos = target(id).level; dragging.add(id);
     });
@@ -181,22 +192,25 @@
   function render() {
     if (!S || !mixId) return;
     for (const [id, e] of els) {
-      const t = target(id);
+      const t = target(id) || { level: 0, mute: false };
       const max = id === 'master' ? S.config.limits.masterMax : S.config.limits.channelMax;
       const pct = t.level * 100;
       e.fill.style.height = pct + '%';
       e.cap.style.bottom = pct + '%';
-      e.read.textContent = readout(t.level, max);
+      e.read.textContent = isAbl() ? (t.level <= 0.001 ? '–∞' : t.level >= 0.995 ? '0 dB' : Math.round(t.level * 100) + '%') : readout(t.level, max);
       e.mute.classList.toggle('on', t.mute);
       e.mute.textContent = t.mute ? 'MUTED' : (e.master ? 'MUTE ALL' : 'MUTE');
       e.strip.classList.toggle('muted', t.mute);
     }
     updateHint();
-    const sync = S.sync[mixId];
+    const sync = isAbl() ? 'synced' : S.sync[mixId];
     const st = $('#state'), bn = $('#banner');
     const stat = S.status;
     let chip = ['live', 'ok'], banner = null;
-    if (stat.interface === false) { chip = ['Scarlett off', 'bad']; banner = ['bad', 'The Scarlett is not connected to the Mac (check USB and power). Nothing you change will reach the mixer until it is back.']; }
+    const ablMix = isAbl() ? allMixes().find((m) => m.id === mixId) : null;
+    if (isAbl() && !(S.ableton && S.ableton.connected)) { chip = ['Ableton off', 'bad']; banner = ['bad', "Ableton isn't answering on the Mac. Open Live with your set, and make sure the AbletonOSC control surface is switched on."]; }
+    else if (isAbl() && !mixState()?.ready) { chip = ['no return', 'warn']; banner = ['warn', `The open Ableton set has no return track called "${ablMix.returnName}", so this mix has nothing to control.`]; }
+    else if (stat.interface === false) { chip = ['Scarlett off', 'bad']; banner = ['bad', 'The Scarlett is not connected to the Mac (check USB and power). Nothing you change will reach the mixer until it is back.']; }
     else if (sync === 'unknown') { chip = ['not synced', 'bad']; banner = ['bad', 'Mixer state unknown. Faders are held (mute still works). Ask the Mac to press Sync on /setup.']; }
     else if (stat.fc2 === false) { chip = ['Control 2 closed', 'bad']; banner = ['bad', 'Focusrite Control 2 is not running on the Mac, so changes will not reach the mixer.']; }
     else if (!stat.midi) { chip = ['MIDI down', 'bad']; banner = ['bad', 'MIDI helper is not responding on the Mac. It restarts automatically.']; }
@@ -207,8 +221,8 @@
 
   function apply(snap) {
     S = snap;
-    if (!mixId || !S.config.mixes.some((m) => m.id === mixId)) { mixId = S.config.mixes[0].id; }
-    const sig = S.config.channels.map((c) => c.id + c.name).join('|') + mixId + S.config.mixes.map((m) => m.name).join();
+    if (!mixId || !allMixes().some((m) => m.id === mixId)) { mixId = S.config.mixes[0].id; }
+    const sig = S.config.channels.map((c) => c.id + c.name).join('|') + mixId + allMixes().map((m) => m.name).join() + (isAbl() ? '|' + (S.ableton?.tracks || []).join() : '');
     if (sig !== builtFor) { build(); builtFor = sig; }
     // Don't fight a finger that is mid-drag.
     for (const id of dragging) { const t = target(id); const e = els.get(id); if (t && e) t.level = lastSent.get(id) ?? t.level; }
@@ -247,6 +261,7 @@
         };
         connect();
       },
+      abl: (p) => fetch('/api/abl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p), keepalive: true }).catch(() => {}),
       set: (p) => fetch('/api/set', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p), keepalive: true }).catch(() => {}),
       wake(onState, setOnline) { fetch('/api/state').then((r) => r.json()).then((st) => { setOnline(true); onState(st); }).catch(() => {}); },
     };
@@ -298,6 +313,7 @@
         };
       },
       set: (p) => send({ t: 'set', ...p }),
+      abl: (p) => send({ t: 'abl', ...p }),
       wake() { if (Date.now() - lastState > 6000 && Date.now() - lastRebuild > 8000) connect(); else send({ t: 'hello' }); },
       signOut() { store.set(KEY, ''); location.reload(); },
     };
