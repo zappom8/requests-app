@@ -15,7 +15,13 @@ const DEFAULT_GIG_MS = 3 * 60 * 60 * 1000;
 // How far back to look for the most recent gig window when deciding whether
 // a manual venue pick is still current.
 const LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
-const CACHE_MS = 5 * 60 * 1000;
+const CACHE_MS = 15 * 60 * 1000;
+// The worked-out gig windows are cached too (see resolveVenueId) — expanding a calendar's recurring
+// events is the costly part, and it was being redone on every Live Queue refresh and every search.
+const WINDOW_CACHE_MS = 10 * 60 * 1000;
+// Windows are computed this far ahead of "now" so a cached copy still covers a window opening later.
+const WINDOW_AHEAD_MS = 25 * 60 * 1000;
+const windowCache = new Map<string, { at: number; windows: VenueWindow[] }>();
 
 export type VenueWindow = { venueId: string; start: Date; end: Date; title: string };
 type VenueKeywords = { id: string; calendarKeywords: string[]; isBusking: boolean };
@@ -143,12 +149,21 @@ export async function resolveVenueId(performerId: string, now = new Date()): Pro
 
   let windows: VenueWindow[];
   try {
-    windows = await getVenueWindows(
-      (settings?.gigsCalendarUrls ?? []).map((u) => u.replace(/^webcal/i, "https")),
-      venues,
-      new Date(now.getTime() - LOOKBACK_MS),
-      now
-    );
+    const urls = (settings?.gigsCalendarUrls ?? []).map((u) => u.replace(/^webcal/i, "https"));
+    // Keyed on the calendars and each venue's keywords, so editing either takes effect at once.
+    const key = JSON.stringify([performerId, urls, venues.map((v) => [v.id, v.calendarKeywords, v.isBusking])]);
+    const hit = windowCache.get(key);
+    if (hit && Date.now() - hit.at < WINDOW_CACHE_MS) {
+      windows = hit.windows;
+    } else {
+      windows = await getVenueWindows(
+        urls,
+        venues,
+        new Date(now.getTime() - LOOKBACK_MS),
+        new Date(now.getTime() + WINDOW_AHEAD_MS)
+      );
+      windowCache.set(key, { at: Date.now(), windows });
+    }
   } catch (e) {
     console.error("[venueSchedule] calendar unavailable", e);
     return null;

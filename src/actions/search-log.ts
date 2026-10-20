@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { resolveVenueId } from "@/lib/venueSchedule";
+import { getCurrentVenueId } from "@/lib/settings";
 
 export type SearchLogEventType = "debounce" | "submit" | "select";
 
@@ -23,7 +23,8 @@ export async function logSearch(input: {
     where: { id: input.songDatabaseId },
     select: { performerId: true },
   });
-  const venueId = db ? await resolveVenueId(db.performerId).catch(() => null) : null;
+  // The venue the Live Queue last settled on (kept in step with the calendar there) — no calendar work per search.
+  const venueId = db ? await getCurrentVenueId(db.performerId).catch(() => null) : null;
 
   await prisma.searchLog.create({
     data: {

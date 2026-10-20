@@ -22,7 +22,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const MAX_WAIT_MS = 20_000;
-const CHECK_EVERY_MS = 150;
+// How often a held request re-checks the database for a new command. Each check costs a little server time;
+// 500ms keeps a score opening within half a second while using ~70% less than the old 150ms.
+const CHECK_EVERY_MS = 500;
 // Same freshness rule as getMissedCommands: never open a stale score.
 const FRESH_MS = 30_000;
 

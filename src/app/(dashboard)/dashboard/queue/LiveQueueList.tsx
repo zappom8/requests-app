@@ -17,7 +17,7 @@ type SerializedItem = Omit<AdminQueueItem, "requestedAt"> & { requestedAt: strin
 type Venue = { id: string; name: string };
 type ForScoreLink = { title: string | null; filename: string | null; setlist: string | null };
 
-const FALLBACK_POLL_MS = 30000;
+const FALLBACK_POLL_MS = 60000;
 // Marking several songs played in quick succession fires one broadcast per
 // action — each triggers a refetch, and those requests can resolve out of
 // order, letting a stale response overwrite a fresher optimistic state
@@ -233,7 +233,7 @@ export default function LiveQueueList({
     // History and back), even though the page itself is force-dynamic —
     // that cache lives in the browser, outside the page's own rendering.
     // Deleted/played items could briefly reappear on return, "undoing"
-    // themselves only once a broadcast or the 30s fallback poll below
+    // themselves only once a broadcast or the 60s fallback poll below
     // eventually caught up. Fetching live data immediately on mount closes
     // that window instead of waiting on either.
     refetchNow();

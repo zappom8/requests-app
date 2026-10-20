@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import type { PublicQueueItem } from "@/lib/queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-// 30s fallback poll in case a broadcast is ever missed (dropped connection,
+// 60s fallback poll in case a broadcast is ever missed (dropped connection,
 // tab backgrounded mid-reconnect, etc.) — real-time updates come from the
 // Supabase Broadcast subscription below, this is just a safety net.
-const FALLBACK_POLL_MS = 30000;
+const FALLBACK_POLL_MS = 60000;
 
 export default function QueueList({
   initialQueue,
