@@ -188,6 +188,9 @@ model SongKey {
   artistName  String
   originalKey String?
   lochiesKey  String?
+  // The chord the song starts on / ends on, for planning transitions between songs.
+  startChord  String?
+  endChord    String?
   updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
 
   @@unique([performerId, songName, artistName])

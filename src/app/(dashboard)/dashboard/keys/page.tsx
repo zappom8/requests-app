@@ -27,6 +27,8 @@ export default async function KeysPage() {
       artistName: s.artist,
       originalKey: key?.originalKey ?? null,
       lochiesKey: key?.lochiesKey ?? null,
+      startChord: key?.startChord ?? null,
+      endChord: key?.endChord ?? null,
     };
   });
 
@@ -35,7 +37,8 @@ export default async function KeysPage() {
       <div>
         <h1 className="text-xl font-semibold mb-1">Keys</h1>
         <p className="text-sm text-foreground-muted">
-          The recording&apos;s original key, and the key you actually perform it in when it differs. Applies
+          The recording&apos;s original key, the key you actually perform it in when it differs, and the chord the
+          song starts on and ends on (handy for planning transitions). Applies
           across every Song Database — fill a song&apos;s key in once here, wherever it&apos;s catalogued. Saved
           as you type, no submit button needed.
         </p>

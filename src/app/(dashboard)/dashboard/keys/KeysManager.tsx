@@ -3,8 +3,15 @@
 import { useMemo, useState } from "react";
 import { setSongKey } from "@/actions/songKeys";
 
-type Row = { songName: string; artistName: string; originalKey: string | null; lochiesKey: string | null };
-type Field = "originalKey" | "lochiesKey";
+type Row = {
+  songName: string;
+  artistName: string;
+  originalKey: string | null;
+  lochiesKey: string | null;
+  startChord: string | null;
+  endChord: string | null;
+};
+type Field = "originalKey" | "lochiesKey" | "startChord" | "endChord";
 
 function KeyCell({ songName, artistName, field, initialValue }: { songName: string; artistName: string; field: Field; initialValue: string | null }) {
   const [value, setValue] = useState(initialValue ?? "");
@@ -68,6 +75,8 @@ export default function KeysManager({ rows }: { rows: Row[] }) {
               <th className="px-3 py-2 font-medium">Artist</th>
               <th className="w-32 px-3 py-2 font-medium">Original Key</th>
               <th className="w-32 px-3 py-2 font-medium">Lochie&apos;s Key</th>
+              <th className="w-32 px-3 py-2 font-medium">Starts on</th>
+              <th className="w-32 px-3 py-2 font-medium">Ends on</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -81,11 +90,17 @@ export default function KeysManager({ rows }: { rows: Row[] }) {
                 <td className="px-2 py-1">
                   <KeyCell songName={r.songName} artistName={r.artistName} field="lochiesKey" initialValue={r.lochiesKey} />
                 </td>
+                <td className="px-2 py-1">
+                  <KeyCell songName={r.songName} artistName={r.artistName} field="startChord" initialValue={r.startChord} />
+                </td>
+                <td className="px-2 py-1">
+                  <KeyCell songName={r.songName} artistName={r.artistName} field="endChord" initialValue={r.endChord} />
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-sm text-foreground-muted">
+                <td colSpan={6} className="px-3 py-6 text-center text-sm text-foreground-muted">
                   {rows.length === 0 ? "No songs in any database yet." : "No songs match your search."}
                 </td>
               </tr>
