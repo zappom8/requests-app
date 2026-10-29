@@ -134,6 +134,31 @@ export async function ensureBuskingVenue(performerId: string): Promise<string> {
   return created.id;
 }
 
+// True when a calendar gig (including its 1h before/after buffer) is on right now. Uses the same
+// cached windows as resolveVenueId. A calendar problem counts as "no gig" (the caller decides what
+// else makes the system active).
+export async function isInGigWindow(performerId: string, now = new Date()): Promise<boolean> {
+  try {
+    const [settings, venues] = await Promise.all([
+      prisma.settings.findUnique({ where: { performerId }, select: { gigsCalendarUrls: true } }),
+      prisma.venue.findMany({ where: { performerId }, select: { id: true, calendarKeywords: true, isBusking: true } }),
+    ]);
+    const urls = (settings?.gigsCalendarUrls ?? []).map((u) => u.replace(/^webcal/i, "https"));
+    const key = JSON.stringify([performerId, urls, venues.map((v) => [v.id, v.calendarKeywords, v.isBusking])]);
+    const hit = windowCache.get(key);
+    let windows: VenueWindow[];
+    if (hit && Date.now() - hit.at < WINDOW_CACHE_MS) {
+      windows = hit.windows;
+    } else {
+      windows = await getVenueWindows(urls, venues, new Date(now.getTime() - LOOKBACK_MS), new Date(now.getTime() + WINDOW_AHEAD_MS));
+      windowCache.set(key, { at: Date.now(), windows });
+    }
+    return windowAt(windows, now) !== null;
+  } catch {
+    return false;
+  }
+}
+
 // What the current venue should be right now. A venue picked by hand holds
 // until a new gig window has opened since the pick; otherwise the gig window
 // containing `now`, otherwise Busking. Returns null if the calendar can't be

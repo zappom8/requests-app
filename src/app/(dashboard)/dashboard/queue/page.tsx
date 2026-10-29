@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { syncCurrentVenue } from "@/lib/venueSchedule";
+import { wakeLiveControl } from "@/lib/liveControlGate";
 import { getActiveSongDatabaseId, getCurrentVenueId } from "@/lib/settings";
 import { getCurrentPerformer } from "@/lib/auth";
 import { getAdminQueue } from "@/lib/queue";
@@ -19,6 +20,8 @@ export default async function LiveQueuePage() {
   const performer = await getCurrentPerformer();
   // Auto-pick the venue from the gigs calendar before reading it below.
   await syncCurrentVenue(performer.id).catch(() => null);
+  // Opening the Live Queue wakes the phone/laptop receivers for a few hours (see liveControlGate.ts).
+  await wakeLiveControl(performer.id).catch(() => null);
   const [activeSongDatabaseId, currentVenueId, venues, forScorePrograms, forScoreLinks, setlistDatabases, pairingMembers] = await Promise.all([
     getActiveSongDatabaseId(performer.id),
     getCurrentVenueId(performer.id),

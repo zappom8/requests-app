@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { isLiveControlActive } from "@/lib/liveControlGate";
 import { buildForScoreOpenUrl } from "@/lib/liveControl/forscoreUrl";
 import type { CommandPayloads } from "@/lib/liveControl/events";
 
@@ -57,6 +58,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   const device = await prisma.performerDevice.findUnique({ where: { channelToken: token } });
   if (!device || (device.role !== "forscore_receiver" && device.role !== "ableton_receiver")) {
     return text("Unknown receiver", 404);
+  }
+
+  // Asleep (no Live Queue open recently and no gig window): answer at once instead of holding the
+  // connection, which is what ate the free-tier memory allowance. The laptop helper retries every 5s.
+  if (!(await isLiveControlActive(device.performerId))) {
+    return text("sleeping", 503);
   }
 
   await prisma.performerDevice.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } });

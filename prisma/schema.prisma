@@ -388,6 +388,9 @@ model Settings {
   // When currentVenueId was last picked by hand on the Live Queue. A manual
   // pick holds until the next calendar gig window opens (src/lib/venueSchedule.ts).
   currentVenueManualAt        DateTime? @db.Timestamptz(3)
+  // The receivers' long-poll (/api/live-control/next) only holds a connection while this is in the
+  // future or a calendar gig window is open (src/lib/liveControlGate.ts); set when the Live Queue opens.
+  liveControlActiveUntil      DateTime? @db.Timestamptz(3)
   // Which PerformerDevice (a forScore receiver — an iPad/iPhone running
   // the Shortcut) the forScore button sends to, from every controller. Plain
   // string like currentVenueId; a deleted device just falls back to "the
