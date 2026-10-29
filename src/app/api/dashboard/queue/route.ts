@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminQueue, getRecentlyPlayed } from "@/lib/queue";
 import { getActiveSongDatabaseId } from "@/lib/settings";
 import { syncCurrentVenue } from "@/lib/venueSchedule";
+import { wakeLiveControl } from "@/lib/liveControlGate";
 import { getBangerKeys } from "@/lib/bangers";
 import { getSignedInPerformer } from "@/lib/auth";
 
@@ -16,6 +17,8 @@ export async function GET() {
     getActiveSongDatabaseId(performer.id),
     syncCurrentVenue(performer.id),
   ]);
+  // An open Live Queue keeps the phone/laptop receivers awake (only writes when it extends by 5+ min).
+  await wakeLiveControl(performer.id).catch(() => null);
   const bangerKeys = await getBangerKeys(currentVenueId);
   if (!activeSongDatabaseId) {
     return NextResponse.json({ queue: [], bangerKeys, currentVenueId, recentlyPlayed: [] });

@@ -5,10 +5,11 @@ import { isInGigWindow } from "@/lib/venueSchedule";
 // The receivers (the phone's Shortcut, the laptop's Hammerspoon) hold a long-poll connection open to
 // /api/live-control/next. Holding connections around the clock used up Vercel's free memory allowance,
 // so they're only answered "for real" while the system is awake:
-//   - the Live Queue page was opened in the last WAKE_HOURS (opening it, e.g. from Gig Mode, wakes them), or
+//   - the Live Queue page is open (opening it, e.g. from Gig Mode, wakes them for WAKE_HOURS, and its
+//     once-a-minute refresh keeps extending that, so a gig of any length stays awake), or
 //   - a calendar gig window (1h before to 1h after) is open.
 // Otherwise the route replies straight away with 503 (the laptop helper retries every 5s, cheaply).
-export const WAKE_HOURS = 3;
+export const WAKE_HOURS = 2;
 
 // Called when the Live Queue page loads. Only rewrites when it would extend the wake-up by 5+ minutes.
 export async function wakeLiveControl(performerId: string) {
