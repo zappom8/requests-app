@@ -1,8 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { getActiveSongDatabaseId } from "@/lib/settings";
 import { getDefaultPerformer } from "@/lib/auth";
 import RequestFlow from "./RequestFlow";
-import { getCancelledArtists, notCancelledSongFilter } from "@/lib/cancelledArtists";
+import { getCachedRequestPageData } from "@/lib/requestPageData";
 import { parseTipThanksTiers } from "@/lib/tipThanks";
 
 // Must always reflect the current active database and its current songs —
@@ -11,7 +10,8 @@ export const dynamic = "force-dynamic";
 
 export default async function RequestPage() {
   const performer = await getDefaultPerformer();
-  const activeSongDatabaseId = await getActiveSongDatabaseId(performer.id);
+  // Song list + settings come from a 60s shared cache (see requestPageData.ts).
+  const { activeSongDatabaseId, settings, songs, artists, decades } = await getCachedRequestPageData(performer.id);
 
   if (!activeSongDatabaseId) {
     return (
@@ -24,37 +24,22 @@ export default async function RequestPage() {
   }
 
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const cancelledArtists = await getCancelledArtists(performer.id);
-
-  const [songs, settings, recentlyPlayedRequests] = await Promise.all([
-    prisma.song.findMany({
-      where: { songDatabaseId: activeSongDatabaseId, ...notCancelledSongFilter(cancelledArtists) },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, artist: true, decade: true },
-    }),
-    prisma.settings.findUnique({
-      where: { performerId: performer.id },
-      select: { defaultTipAmountsCents: true, disableRecentlyPlayedPrompt: true, tipThankYouTiers: true },
-    }),
-    prisma.request.findMany({
-      // isPairedAddition/isBangerAddition excluded — an auto-added song was
-      // never a real request, so it shouldn't trigger the "this was just
-      // played" prompt any more than it counts toward Statistics.
-      where: {
-        songDatabaseId: activeSongDatabaseId,
-        status: "PLAYED",
-        playedAt: { gte: oneHourAgo },
-        songId: { not: null },
-        isPairedAddition: false,
-        isBangerAddition: false,
-      },
-      select: { songId: true, playedAt: true },
-      orderBy: { playedAt: "desc" },
-    }),
-  ]);
-
-  const artists = Array.from(new Set(songs.map((s) => s.artist))).sort();
-  const decades = Array.from(new Set(songs.map((s) => s.decade).filter((d): d is string => !!d))).sort();
+  // Kept live (not cached) so "just played" stays accurate.
+  const recentlyPlayedRequests = await prisma.request.findMany({
+    // isPairedAddition/isBangerAddition excluded — an auto-added song was
+    // never a real request, so it shouldn't trigger the "this was just
+    // played" prompt any more than it counts toward Statistics.
+    where: {
+      songDatabaseId: activeSongDatabaseId,
+      status: "PLAYED",
+      playedAt: { gte: oneHourAgo },
+      songId: { not: null },
+      isPairedAddition: false,
+      isBangerAddition: false,
+    },
+    select: { songId: true, playedAt: true },
+    orderBy: { playedAt: "desc" },
+  });
 
   // Keep only the most recent play per song — requests are ordered newest
   // first above, so the first entry seen per songId wins.

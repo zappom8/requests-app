@@ -1,7 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { REQUEST_PAGE_TAG } from "@/lib/requestPageData";
 import { parseSongsCsv } from "@/lib/csv";
 import { assertOwnsDatabase, requirePerformer } from "@/lib/auth";
 
@@ -54,6 +55,7 @@ export async function setActiveDatabase(formData: FormData): Promise<ActionResul
     });
     revalidatePath("/dashboard/databases");
     revalidatePath("/request");
+    revalidateTag(REQUEST_PAGE_TAG, { expire: 0 });
     return { success: true };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "Something went wrong. Please try again." };

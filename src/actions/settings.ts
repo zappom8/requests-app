@@ -3,7 +3,8 @@
 import type { TipThanksTier } from "@/lib/tipThanks";
 import { prisma } from "@/lib/prisma";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { REQUEST_PAGE_TAG } from "@/lib/requestPageData";
 import { requirePerformer } from "@/lib/auth";
 
 // Matches Supabase's "branding" bucket cap — checked here too so a bad
@@ -73,6 +74,7 @@ export async function setCancelledArtists(formData: FormData): Promise<{ counts:
   revalidatePath("/dashboard/bangers");
   revalidatePath("/dashboard/queue");
   revalidatePath("/request");
+  revalidateTag(REQUEST_PAGE_TAG, { expire: 0 });
   return { counts };
 }
 
@@ -149,6 +151,7 @@ export async function updateSettings(formData: FormData) {
   revalidatePath("/dashboard/settings");
   revalidatePath("/profile");
   revalidatePath("/request");
+  revalidateTag(REQUEST_PAGE_TAG, { expire: 0 });
   revalidatePath("/gigs");
 }
 
