@@ -43,6 +43,22 @@ function KeyCell({ instrument, songName, artistName, field, initialValue }: { in
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={handleBlur}
+      onKeyDown={(e) => {
+        // Up/Down (or Enter) moves to the same column in the next/previous row.
+        const down = e.key === "ArrowDown" || (e.key === "Enter" && !e.shiftKey);
+        const up = e.key === "ArrowUp" || (e.key === "Enter" && e.shiftKey);
+        if (!down && !up) return;
+        const td = e.currentTarget.closest("td");
+        const tr = td?.parentElement;
+        if (!td || !tr) return;
+        const target = down ? tr.nextElementSibling : tr.previousElementSibling;
+        const next = target?.children[td.cellIndex]?.querySelector("input");
+        if (next) {
+          e.preventDefault();
+          next.focus();
+          next.select();
+        }
+      }}
       placeholder="—"
       className={`w-full rounded-lg border bg-background px-2 py-1.5 text-sm outline-none focus:border-accent ${
         saving ? "border-accent" : "border-border"
