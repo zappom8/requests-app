@@ -191,9 +191,13 @@ model SongKey {
   // The chord the song starts on / ends on, for planning transitions between songs.
   startChord  String?
   endChord    String?
+  // "guitar" | "piano" — keys can differ per instrument. Existing rows are guitar.
+  instrument  String    @default("guitar")
+  // Guitar only: fret the capo goes on (free text, e.g. "3").
+  capo        String?
   updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
 
-  @@unique([performerId, songName, artistName])
+  @@unique([performerId, instrument, songName, artistName])
 }
 
 // The MIDI Program Change that opens this song's score in a forScore

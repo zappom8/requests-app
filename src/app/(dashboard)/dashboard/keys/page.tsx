@@ -19,8 +19,11 @@ export default async function KeysPage() {
     prisma.songKey.findMany({ where: { performerId: performer.id } }),
   ]);
 
-  const keyByName = new Map(keys.map((k) => [`${k.songName}::${k.artistName}`, k]));
-  const rows = songs.map((s) => {
+  const buildRows = (instrument: string) => {
+    const keyByName = new Map(
+      keys.filter((k) => k.instrument === instrument).map((k) => [`${k.songName}::${k.artistName}`, k]),
+    );
+    return songs.map((s) => {
     const key = keyByName.get(`${s.name}::${s.artist}`);
     return {
       songName: s.name,
@@ -29,8 +32,12 @@ export default async function KeysPage() {
       lochiesKey: key?.lochiesKey ?? null,
       startChord: key?.startChord ?? null,
       endChord: key?.endChord ?? null,
+      capo: key?.capo ?? null,
     };
-  });
+    });
+  };
+  const guitarRows = buildRows("guitar");
+  const pianoRows = buildRows("piano");
 
   return (
     <div className="space-y-6">
@@ -39,12 +46,12 @@ export default async function KeysPage() {
         <p className="text-sm text-foreground-muted">
           The recording&apos;s original key, the key you actually perform it in when it differs, and the chord the
           song starts on and ends on (handy for planning transitions). Applies
-          across every Song Database — fill a song&apos;s key in once here, wherever it&apos;s catalogued. Saved
+          across every Song Database — fill a song&apos;s key in once here, wherever it&apos;s catalogued. Keys are kept separately for Guitar and Piano, and Guitar also has a capo fret. Saved
           as you type, no submit button needed.
         </p>
       </div>
 
-      <KeysManager rows={rows} />
+      <KeysManager guitarRows={guitarRows} pianoRows={pianoRows} />
     </div>
   );
 }

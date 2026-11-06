@@ -10,10 +10,12 @@ type Row = {
   lochiesKey: string | null;
   startChord: string | null;
   endChord: string | null;
+  capo: string | null;
 };
-type Field = "originalKey" | "lochiesKey" | "startChord" | "endChord";
+type Instrument = "guitar" | "piano";
+type Field = "originalKey" | "lochiesKey" | "startChord" | "endChord" | "capo";
 
-function KeyCell({ songName, artistName, field, initialValue }: { songName: string; artistName: string; field: Field; initialValue: string | null }) {
+function KeyCell({ instrument, songName, artistName, field, initialValue }: { instrument: Instrument; songName: string; artistName: string; field: Field; initialValue: string | null }) {
   const [value, setValue] = useState(initialValue ?? "");
   const [savedValue, setSavedValue] = useState(initialValue ?? "");
   const [saving, setSaving] = useState(false);
@@ -22,6 +24,7 @@ function KeyCell({ songName, artistName, field, initialValue }: { songName: stri
     if (value === savedValue) return;
     setSaving(true);
     const formData = new FormData();
+    formData.set("instrument", instrument);
     formData.set("songName", songName);
     formData.set("artistName", artistName);
     formData.set("field", field);
@@ -48,7 +51,9 @@ function KeyCell({ songName, artistName, field, initialValue }: { songName: stri
   );
 }
 
-export default function KeysManager({ rows }: { rows: Row[] }) {
+export default function KeysManager({ guitarRows, pianoRows }: { guitarRows: Row[]; pianoRows: Row[] }) {
+  const [instrument, setInstrument] = useState<Instrument>("guitar");
+  const rows = instrument === "guitar" ? guitarRows : pianoRows;
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -59,6 +64,20 @@ export default function KeysManager({ rows }: { rows: Row[] }) {
 
   return (
     <div className="space-y-3">
+      <div className="flex gap-2">
+        {(["guitar", "piano"] as const).map((i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setInstrument(i)}
+            className={`rounded-lg border px-4 py-1.5 text-sm font-medium capitalize ${
+              instrument === i ? "border-accent bg-accent/10 text-foreground" : "border-border text-foreground-muted"
+            }`}
+          >
+            {i}
+          </button>
+        ))}
+      </div>
       <input
         type="text"
         value={query}
@@ -77,6 +96,7 @@ export default function KeysManager({ rows }: { rows: Row[] }) {
               <th className="w-32 px-3 py-2 font-medium">Lochie&apos;s Key</th>
               <th className="w-32 px-3 py-2 font-medium">Starts on</th>
               <th className="w-32 px-3 py-2 font-medium">Ends on</th>
+              {instrument === "guitar" && <th className="w-24 px-3 py-2 font-medium">Capo fret</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -85,22 +105,27 @@ export default function KeysManager({ rows }: { rows: Row[] }) {
                 <td className="px-3 py-1.5 truncate max-w-[200px]">{r.songName}</td>
                 <td className="px-3 py-1.5 truncate max-w-[200px] text-foreground-muted">{r.artistName}</td>
                 <td className="px-2 py-1">
-                  <KeyCell songName={r.songName} artistName={r.artistName} field="originalKey" initialValue={r.originalKey} />
+                  <KeyCell key={`${instrument}::${r.songName}::${r.artistName}`} instrument={instrument} songName={r.songName} artistName={r.artistName} field="originalKey" initialValue={r.originalKey} />
                 </td>
                 <td className="px-2 py-1">
-                  <KeyCell songName={r.songName} artistName={r.artistName} field="lochiesKey" initialValue={r.lochiesKey} />
+                  <KeyCell key={`${instrument}::${r.songName}::${r.artistName}`} instrument={instrument} songName={r.songName} artistName={r.artistName} field="lochiesKey" initialValue={r.lochiesKey} />
                 </td>
                 <td className="px-2 py-1">
-                  <KeyCell songName={r.songName} artistName={r.artistName} field="startChord" initialValue={r.startChord} />
+                  <KeyCell key={`${instrument}::${r.songName}::${r.artistName}`} instrument={instrument} songName={r.songName} artistName={r.artistName} field="startChord" initialValue={r.startChord} />
                 </td>
                 <td className="px-2 py-1">
-                  <KeyCell songName={r.songName} artistName={r.artistName} field="endChord" initialValue={r.endChord} />
+                  <KeyCell key={`${instrument}::${r.songName}::${r.artistName}`} instrument={instrument} songName={r.songName} artistName={r.artistName} field="endChord" initialValue={r.endChord} />
                 </td>
+                {instrument === "guitar" && (
+                  <td className="px-2 py-1">
+                    <KeyCell key={`${instrument}::${r.songName}::${r.artistName}::capo`} instrument={instrument} songName={r.songName} artistName={r.artistName} field="capo" initialValue={r.capo} />
+                  </td>
+                )}
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-sm text-foreground-muted">
+                <td colSpan={instrument === "guitar" ? 7 : 6} className="px-3 py-6 text-center text-sm text-foreground-muted">
                   {rows.length === 0 ? "No songs in any database yet." : "No songs match your search."}
                 </td>
               </tr>
